@@ -18,7 +18,7 @@ public sealed class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Ignore<NavigationPlatform.Domain.Common.DomainEvent>();
+        modelBuilder.Ignore<Domain.Common.DomainEvent>();
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }

@@ -22,6 +22,7 @@ internal sealed class NotificationWorker : BackgroundService
             try
             {
                 using var scope = _scopeFactory.CreateScope();
+
                 var processor = scope.ServiceProvider
                     .GetRequiredService<NotificationOutboxProcessor>();
 
@@ -29,10 +30,10 @@ internal sealed class NotificationWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Notification processing failed");
+                _logger.LogError(ex, "Notification worker iteration failed");
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
         }
     }
 }

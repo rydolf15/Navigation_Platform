@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using NavigationPlatform.Domain.Common;
 using NavigationPlatform.Infrastructure.Persistence.Outbox;
 
 namespace NavigationPlatform.RewardWorker.Persistence;
@@ -12,5 +13,13 @@ internal sealed class RewardDbContext : DbContext
         : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-        => modelBuilder.ApplyConfigurationsFromAssembly(typeof(RewardDbContext).Assembly);
+    {
+        modelBuilder.Ignore<DomainEvent>();
+
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(NavigationPlatform.Infrastructure.Persistence.AppDbContext).Assembly);
+
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(RewardDbContext).Assembly);
+    }
 }

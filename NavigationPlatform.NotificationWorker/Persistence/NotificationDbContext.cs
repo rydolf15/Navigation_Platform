@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using NavigationPlatform.Domain.Common;
 using NavigationPlatform.Infrastructure.Persistence.Favourites;
 using NavigationPlatform.Infrastructure.Persistence.Outbox;
 
@@ -11,4 +12,15 @@ internal sealed class NotificationDbContext : DbContext
 
     public NotificationDbContext(DbContextOptions<NotificationDbContext> options)
         : base(options) { }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Ignore<DomainEvent>();
+
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(NavigationPlatform.Infrastructure.Persistence.AppDbContext).Assembly);
+
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(NotificationDbContext).Assembly);
+    }
 }
