@@ -23,6 +23,9 @@ builder.Services.AddSingleton<SignalRNotifier>(_ =>
     new SignalRNotifier(builder.Configuration["SignalR:HubUrl"]!));
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
+// ---------- Processing ----------
+builder.Services.AddScoped<NotificationOutboxProcessor>();
+
 // ---------- Worker ----------
 builder.Services.AddHostedService<NotificationWorker>();
 

@@ -12,7 +12,7 @@ internal sealed class CurrentUser : ICurrentUser
 
     public Guid UserId =>
         Guid.Parse(
-            _http.HttpContext!.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            _http.HttpContext!.User.FindFirstValue("sub")!);
 
     public bool IsAdmin =>
         _http.HttpContext!.User.IsInRole("Admin");

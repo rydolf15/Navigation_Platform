@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using NavigationPlatform.Api.Auth;
 using NavigationPlatform.Api.Contracts.Journeys;
 using NavigationPlatform.Api.Realtime;
 using NavigationPlatform.Application.Abstractions.Identity;
@@ -39,15 +40,23 @@ builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("Default")!);
 
 // ---------- Auth ----------
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
     {
-        options.Authority = builder.Configuration["Auth:Authority"];
-        options.Audience = builder.Configuration["Auth:Audience"];
-        options.RequireHttpsMetadata = true;
+        o.Authority = builder.Configuration["Auth:Authority"];
+        o.Audience = builder.Configuration["Auth:Audience"];
+        o.RequireHttpsMetadata = false;
+
+        // Read JWT from HTTP-only cookie
+        o.EventsType = typeof(CookieJwtBearerEvents);
     });
 
 builder.Services.AddAuthorization();
+
+// Required for cookie-based JWT handling
+builder.Services.AddScoped<CookieJwtBearerEvents>();
+builder.Services.AddHttpClient();
 
 // ---------- Rate limiting ----------
 builder.Services.AddRateLimiter(o =>
@@ -82,6 +91,38 @@ builder.Services.AddSignalR()
 builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var logger = scope.ServiceProvider
+        .GetRequiredService<ILogger<Program>>();
+
+    const int maxRetries = 10;
+    var delay = TimeSpan.FromSeconds(3);
+
+    for (var attempt = 1; attempt <= maxRetries; attempt++)
+    {
+        try
+        {
+            db.Database.Migrate();
+            logger.LogInformation("Database migration completed");
+            break;
+        }
+        catch (Exception ex) when (attempt < maxRetries)
+        {
+            logger.LogWarning(
+                ex,
+                "Database not ready (attempt {Attempt}/{Max}). Retrying in {Delay}s...",
+                attempt,
+                maxRetries,
+                delay.TotalSeconds);
+
+            Thread.Sleep(delay);
+        }
+    }
+}
+
 
 // ---------- Middleware ----------
 app.UseSerilogRequestLogging();

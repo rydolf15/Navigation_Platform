@@ -5,7 +5,15 @@ using Serilog;
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddDbContext<RewardDbContext>(o =>
-    o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+    o.UseNpgsql(
+        builder.Configuration.GetConnectionString("Default"),
+        npgsql =>
+        {
+            npgsql.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+        }));
 
 builder.Services.AddSingleton<OutboxProcessor>();
 

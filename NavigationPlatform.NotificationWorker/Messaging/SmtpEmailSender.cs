@@ -1,20 +1,29 @@
 ﻿using Serilog;
+using System.Net.Mail;
 
 namespace NavigationPlatform.NotificationWorker.Messaging;
 
 internal sealed class SmtpEmailSender : IEmailSender
 {
-    public Task SendAsync(Guid userId, string subject, string body)
-    {
-        // TEMPORARY IMPLEMENTATION
-        // Replace with real SMTP / SendGrid later
+    private readonly IConfiguration _config;
 
-        Log.Information(
-            "EMAIL fallback → UserId={UserId}, Subject={Subject}, Body={Body}",
-            userId,
+    public SmtpEmailSender(IConfiguration config)
+    {
+        _config = config;
+    }
+
+    public async Task SendAsync(Guid userId, string subject, string body)
+    {
+        var host = _config["Smtp:Host"]!;
+        var port = int.Parse(_config["Smtp:Port"]!);
+
+        using var client = new SmtpClient(host, port);
+        var message = new MailMessage(
+            "noreply@navigation.local",
+            $"{userId}@example.com",
             subject,
             body);
 
-        return Task.CompletedTask;
+        await client.SendMailAsync(message);
     }
 }

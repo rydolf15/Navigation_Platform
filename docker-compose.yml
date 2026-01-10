@@ -1,0 +1,71 @@
+version: "3.9"
+
+services:
+
+  keycloak:
+      image: quay.io/keycloak/keycloak:25.0
+      container_name: navigation-keycloak
+      command: start-dev
+      environment:
+        KEYCLOAK_ADMIN: admin
+        KEYCLOAK_ADMIN_PASSWORD: admin
+      ports:
+        - "8080:8080"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: navigation
+      POSTGRES_USER: nav
+      POSTGRES_PASSWORD: nav
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    build:
+      context: .
+      dockerfile: NavigationPlatform.Api/Dockerfile
+    depends_on:
+      - postgres
+      - redis
+      - mailhog
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "5000:8080"
+
+  reward-worker:
+    build:
+      context: .
+      dockerfile: NavigationPlatform.RewardWorker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notification-worker:
+    build:
+      context: .
+      dockerfile: NavigationPlatform.NotificationWorker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mailhog:
+        condition: service_started
+
+volumes:
+  pgdata:
