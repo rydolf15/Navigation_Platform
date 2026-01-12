@@ -3,6 +3,18 @@ import { getJourneys } from "../api/journeys";
 import type { JourneyDto } from "../api/journeys";
 import { JourneyCard } from "../components/JourneyCard";
 
+import {
+  getJourneysHub,
+  startJourneysHub,
+  stopJourneysHub,
+} from "../realtime/journeysHub";
+
+import type {
+  JourneyUpdatedEvent,
+  JourneyDeletedEvent,
+  JourneyFavouriteChangedEvent,
+} from "../realtime/events";
+
 const PAGE_SIZE = 10;
 
 export function JourneyListPage() {
@@ -11,6 +23,7 @@ export function JourneyListPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Data loading (paged)
   useEffect(() => {
     let cancelled = false;
 
@@ -31,6 +44,84 @@ export function JourneyListPage() {
     };
   }, [page]);
 
+  // Realtime updates (SignalR)
+  useEffect(() => {
+    let cancelled = false;
+    const hub = getJourneysHub();
+
+    async function connect() {
+      await startJourneysHub();
+      if (cancelled) return;
+
+      hub.on("JourneyUpdated", (e: JourneyUpdatedEvent) => {
+        setJourneys(items =>
+          items.map(j =>
+            j.id === e.journeyId ? { ...j } : j
+          )
+        );
+      });
+
+      hub.on("JourneyDeleted", (e: JourneyDeletedEvent) => {
+        setJourneys(items =>
+          items.filter(j => j.id !== e.journeyId)
+        );
+      });
+
+      hub.on("JourneyFavouriteChanged", (e: JourneyFavouriteChangedEvent) => {
+        setJourneys(items =>
+          items.map(j =>
+            j.id === e.journeyId
+              ? { ...j, isFavourite: e.isFavourite }
+              : j
+          )
+        );
+      });
+    }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      hub.off("JourneyUpdated");
+      hub.off("JourneyDeleted");
+      hub.off("JourneyFavouriteChanged");
+      stopJourneysHub();
+    };
+  }, []);
+
+  useEffect(() => {
+    function onFavouriteChanged(e: Event) {
+      const evt = e as CustomEvent<{ journeyId: string; isFavourite: boolean }>;
+
+      setJourneys(journeys =>
+        journeys.map(j =>
+          j.id === evt.detail.journeyId
+            ? { ...j, isFavourite: evt.detail.isFavourite }
+            : j
+        )
+      );
+    }
+
+    function onDeleted(e: Event) {
+      const evt = e as CustomEvent<{ journeyId: string }>;
+
+      setJourneys(journeys =>
+        journeys.filter(j => j.id !== evt.detail.journeyId)
+      );
+    }
+
+    window.addEventListener("journey:favourite-changed", onFavouriteChanged);
+    window.addEventListener("journey:deleted", onDeleted);
+
+    return () => {
+      window.removeEventListener(
+        "journey:favourite-changed",
+        onFavouriteChanged
+      );
+      window.removeEventListener("journey:deleted", onDeleted);
+    };
+  }, []);
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
@@ -45,7 +136,17 @@ export function JourneyListPage() {
 
       {!loading &&
         journeys.map(j => (
-          <JourneyCard key={j.id} journey={j} />
+          <JourneyCard
+            key={j.id}
+            journey={j}
+            onFavouriteToggle={(next) =>
+              setJourneys(items =>
+                items.map(x =>
+                  x.id === j.id ? { ...x, isFavourite: next } : x
+                )
+              )
+            }
+          />
         ))}
 
       {totalPages > 1 && (
@@ -53,7 +154,7 @@ export function JourneyListPage() {
           style={{
             display: "flex",
             justifyContent: "space-between",
-            marginTop: "1rem"
+            marginTop: "1rem",
           }}
         >
           <button

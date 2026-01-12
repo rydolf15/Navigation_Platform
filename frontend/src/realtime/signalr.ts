@@ -1,8 +1,30 @@
-import * as signalR from "@microsoft/signalr";
+import {
+  HubConnection,
+  HubConnectionBuilder,
+  HubConnectionState,
+  LogLevel,
+} from "@microsoft/signalr";
 
-export const connection = new signalR.HubConnectionBuilder()
-  .withUrl("/hubs/journeys", {
-    withCredentials: true
-  })
-  .withAutomaticReconnect()
-  .build();
+let connection: HubConnection | null = null;
+
+export function getSignalRConnection(): HubConnection {
+  if (connection) return connection;
+
+  connection = new HubConnectionBuilder()
+    .withUrl("/hubs/notifications", {
+      withCredentials: true,
+    })
+    .withAutomaticReconnect()
+    .configureLogging(LogLevel.Information)
+    .build();
+
+  return connection;
+}
+
+export async function ensureSignalRStarted(): Promise<void> {
+  const conn = getSignalRConnection();
+
+  if (conn.state === HubConnectionState.Disconnected) {
+    await conn.start();
+  }
+}

@@ -9,11 +9,33 @@ export function RequireAuth({ children }: RequireAuthProps) {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch("/api/journeys?page=1&pageSize=1", {
-      credentials: "include",
-    })
-      .then(r => setAuthorized(r.ok))
-      .catch(() => setAuthorized(false));
+    let cancelled = false;
+
+    async function checkAuth() {
+      try {
+        const response = await fetch("/api/journeys?page=1&pageSize=1", {
+          credentials: "include",
+        });
+
+        if (cancelled) return;
+
+        if (response.status === 401) {
+          setAuthorized(false);
+        } else {
+          setAuthorized(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setAuthorized(true);
+        }
+      }
+    }
+
+    checkAuth();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (authorized === null) return null;

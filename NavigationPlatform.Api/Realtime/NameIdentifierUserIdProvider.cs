@@ -1,11 +1,11 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using System.Security.Claims;
 
 namespace NavigationPlatform.Api.Realtime;
 
 internal sealed class NameIdentifierUserIdProvider : IUserIdProvider
 {
     public string? GetUserId(HubConnectionContext connection)
-        => connection.User?
-            .FindFirst("sub")?
-            .Value;
+        => connection.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+           ?? connection.User?.FindFirst("sub")?.Value;
 }

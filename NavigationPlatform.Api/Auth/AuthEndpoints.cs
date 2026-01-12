@@ -24,7 +24,7 @@ public static class AuthEndpoints
                 });
 
             var url =
-                $"{cfg["Auth:Authority"]}/protocol/openid-connect/auth" +
+                $"{cfg["Auth:AuthorityPublic"]}/protocol/openid-connect/auth" +
                 $"?client_id={cfg["Auth:ClientId"]}" +
                 $"&response_type=code" +
                 $"&scope=openid profile offline_access" +
@@ -33,57 +33,56 @@ public static class AuthEndpoints
                 $"&code_challenge_method=S256";
 
             return Results.Redirect(url);
-        }).RequireRateLimiting("login");
+        }).AllowAnonymous().RequireRateLimiting("login");
 
-        app.MapGet(
-      "/api/auth/callback",
-      async Task<Results<RedirectHttpResult, UnauthorizedHttpResult>> (
-          HttpContext ctx,
-          IConfiguration cfg,
-          IHttpClientFactory http) =>
-      {
-          var code = ctx.Request.Query["code"].ToString();
-          var verifier = ctx.Request.Cookies["pkce_verifier"];
 
-          if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(verifier))
-              return TypedResults.Unauthorized();
 
-          var client = http.CreateClient();
+        app.MapGet("/api/auth/callback", 
+        async Task<Results<RedirectHttpResult, UnauthorizedHttpResult>> (HttpContext ctx, IConfiguration cfg, IHttpClientFactory http) =>
+        {
+            var code = ctx.Request.Query["code"].ToString();
+            var verifier = ctx.Request.Cookies["pkce_verifier"];
 
-          var response = await client.PostAsync(
-              $"{cfg["Auth:Authority"]}/protocol/openid-connect/token",
-              new FormUrlEncodedContent(new Dictionary<string, string>
-              {
-                  ["grant_type"] = "authorization_code",
-                  ["client_id"] = cfg["Auth:ClientId"]!,
-                  //["client_secret"] = cfg["Auth:ClientSecret"]!,
-                  ["code"] = code,
-                  ["redirect_uri"] = cfg["Auth:RedirectUri"]!,
-                  ["code_verifier"] = verifier
-              }));
+            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(verifier))
+                return TypedResults.Unauthorized();
 
-          if (!response.IsSuccessStatusCode)
-              return TypedResults.Unauthorized();
+            var client = http.CreateClient();
 
-          var json = await response.Content.ReadFromJsonAsync<TokenResponse>();
-          if (json is null)
-              return TypedResults.Unauthorized();
+            var response = await client.PostAsync(
+                $"{cfg["Auth:AuthorityInternal"]}/protocol/openid-connect/token",
+                new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["grant_type"] = "authorization_code",
+                    ["client_id"] = cfg["Auth:ClientId"]!,
+                    ["code"] = code,
+                    ["redirect_uri"] = cfg["Auth:RedirectUri"]!,
+                    ["code_verifier"] = verifier
+                }));
 
-          ctx.Response.Cookies.Append(
-              AuthCookies.AccessToken,
-              json.AccessToken,
-              SecureCookieOptions(TimeSpan.FromMinutes(15)));
 
-          ctx.Response.Cookies.Append(
-              AuthCookies.RefreshToken,
-              json.RefreshToken,
-              SecureCookieOptions(TimeSpan.FromDays(30)));
+            if (!response.IsSuccessStatusCode)
+                return TypedResults.Unauthorized();
 
-          // PKCE hygiene
-          ctx.Response.Cookies.Delete("pkce_verifier");
+            var json = await response.Content.ReadFromJsonAsync<TokenResponse>();
+            if (json is null)
+                return TypedResults.Unauthorized();
 
-          return TypedResults.Redirect(cfg["Auth:SpaBaseUrl"]!);
-      });
+            ctx.Response.Cookies.Append(
+                AuthCookies.AccessToken,
+                json.AccessToken,
+                SecureCookieOptions(TimeSpan.FromMinutes(15)));
+
+            ctx.Response.Cookies.Append(
+                AuthCookies.RefreshToken,
+                json.RefreshToken,
+                SecureCookieOptions(TimeSpan.FromDays(30)));
+
+            // PKCE hygiene
+            ctx.Response.Cookies.Delete("pkce_verifier");
+
+            return TypedResults.Redirect(cfg["Auth:SpaBaseUrl"]!);
+        }).AllowAnonymous();
+
 
 
         app.MapPost("/api/auth/refresh", async (HttpContext ctx, IConfiguration cfg, IHttpClientFactory http) =>
@@ -94,14 +93,14 @@ public static class AuthEndpoints
             var client = http.CreateClient();
 
             var response = await client.PostAsync(
-                $"{cfg["Auth:Authority"]}/protocol/openid-connect/token",
+                $"{cfg["Auth:AuthorityInternal"]}/protocol/openid-connect/token",
                 new FormUrlEncodedContent(new Dictionary<string, string>
                 {
                     ["grant_type"] = "refresh_token",
                     ["client_id"] = cfg["Auth:ClientId"]!,
-                    //["client_secret"] = cfg["Auth:ClientSecret"]!,
                     ["refresh_token"] = refresh
                 }));
+
 
             if (!response.IsSuccessStatusCode)
                 return Results.Unauthorized();
@@ -114,7 +113,9 @@ public static class AuthEndpoints
                 SecureCookieOptions(TimeSpan.FromDays(30)));
 
             return Results.NoContent();
-        });
+        }).AllowAnonymous();
+
+
 
         app.MapPost("/api/auth/logout", async (HttpContext ctx, IConfiguration cfg, IHttpClientFactory http) =>
         {
@@ -126,14 +127,14 @@ public static class AuthEndpoints
 
                 // RFC 7009 token revocation
                 await client.PostAsync(
-                    $"{cfg["Auth:Authority"]}/protocol/openid-connect/revoke",
+                    $"{cfg["Auth:AuthorityInternal"]}/protocol/openid-connect/revoke",
                     new FormUrlEncodedContent(new Dictionary<string, string>
                     {
                         ["client_id"] = cfg["Auth:ClientId"]!,
-                        //["client_secret"] = cfg["Auth:ClientSecret"]!,
                         ["token"] = refreshToken,
                         ["token_type_hint"] = "refresh_token"
                     }));
+
                 // Ignore response intentionally (idempotent logout)
             }
 
@@ -142,7 +143,7 @@ public static class AuthEndpoints
             ctx.Response.Cookies.Delete(AuthCookies.RefreshToken);
 
             return Results.NoContent();
-        }).RequireAuthorization();
+        }).AllowAnonymous().RequireAuthorization();
     }
 
     private static CookieOptions SecureCookieOptions(TimeSpan maxAge) =>

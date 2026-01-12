@@ -1,47 +1,63 @@
-import type { JourneyDto } from "../api/journeys";
 import { Link } from "react-router-dom";
+import type { JourneyDto } from "../api/journeys";
+import { FavouriteButton } from "./FavouriteButton";
+import {
+  favoriteJourney,
+  unfavoriteJourney,
+} from "../api/journeys";
 
-interface Props {
+interface JourneyCardProps {
   journey: JourneyDto;
+  onFavouriteToggle: (next: boolean) => void;
 }
 
-export function JourneyCard({ journey }: Props) {
+export function JourneyCard({
+  journey,
+  onFavouriteToggle,
+}: JourneyCardProps) {
   return (
     <article
       style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 6,
         padding: "1rem",
-        marginBottom: "0.75rem"
+        borderBottom: "1px solid #e5e7eb",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "1rem",
       }}
     >
-      <h2 style={{ marginBottom: "0.25rem" }}>
-        {journey.startLocation} → {journey.arrivalLocation}
-      </h2>
+      <div>
+        <h3 style={{ marginBottom: "0.25rem" }}>
+          <Link to={`/journeys/${journey.id}`}>
+            {journey.startLocation} → {journey.arrivalLocation}
+          </Link>
+        </h3>
 
-      <p style={{ fontSize: "0.9rem", color: "#4b5563" }}>
-        Distance: {journey.distanceKm.toFixed(2)} km · {journey.transportType}
-      </p>
-
-      {journey.isDailyGoalAchieved && (
-        <span
-          style={{
-            display: "inline-block",
-            marginTop: "0.5rem",
-            padding: "0.25rem 0.5rem",
-            backgroundColor: "#16a34a",
-            color: "white",
-            borderRadius: 4,
-            fontSize: "0.75rem"
-          }}
-        >
-          Daily goal achieved
-        </span>
-      )}
-
-      <div style={{ marginTop: "0.75rem" }}>
-        <Link to={`/journeys/${journey.id}`}>View details</Link>
+        <p style={{ margin: 0 }}>
+          {journey.distanceKm} km · {journey.transportType}
+        </p>
       </div>
+
+      <FavouriteButton
+        isFavourite={journey.isFavourite ?? false}
+        onToggle={async () => {
+          const next = !(journey.isFavourite ?? false);
+
+          // optimistic update
+          onFavouriteToggle(next);
+
+          try {
+            if (next) {
+              await favoriteJourney(journey.id);
+            } else {
+              await unfavoriteJourney(journey.id);
+            }
+          } catch {
+            // revert on failure
+            onFavouriteToggle(!next);
+          }
+        }}
+      />
     </article>
   );
 }

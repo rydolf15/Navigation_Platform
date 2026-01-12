@@ -31,7 +31,10 @@ internal sealed class NotificationOutboxProcessor
             .Where(x =>
                 !x.Processed &&
                 (x.Type == nameof(JourneyUpdated) ||
-                 x.Type == nameof(JourneyDeleted)))
+                 x.Type == nameof(JourneyDeleted) ||
+                 x.Type == nameof(JourneyFavorited) ||
+                 x.Type == nameof(JourneyUnfavorited) ||
+                 x.Type == nameof(JourneyShared)))
             .OrderBy(x => x.OccurredUtc)
             .Take(100)
             .ToListAsync(ct);
@@ -46,44 +49,114 @@ internal sealed class NotificationOutboxProcessor
     }
 
     private async Task HandleAsync(
-        Infrastructure.Persistence.Outbox.OutboxMessage msg,
+     Infrastructure.Persistence.Outbox.OutboxMessage msg,
+     CancellationToken ct)
+    {
+        switch (msg.Type)
+        {
+            case nameof(JourneyFavorited):
+                {
+                    var evt = JsonSerializer.Deserialize<JourneyFavorited>(msg.Payload)!;
+
+                    await NotifyUserAsync(
+                        evt.UserId,
+                        "JourneyFavouriteChanged",
+                        new { journeyId = evt.JourneyId, isFavourite = true });
+
+                    break;
+                }
+
+            case nameof(JourneyUnfavorited):
+                {
+                    var evt = JsonSerializer.Deserialize<JourneyUnfavorited>(msg.Payload)!;
+
+                    await NotifyUserAsync(
+                        evt.UserId,
+                        "JourneyFavouriteChanged",
+                        new { journeyId = evt.JourneyId, isFavourite = false });
+
+                    break;
+                }
+
+            case nameof(JourneyUpdated):
+                {
+                    var evt = JsonSerializer.Deserialize<JourneyUpdated>(msg.Payload)!;
+
+                    await NotifyFavouritersAsync(
+                        evt.JourneyId,
+                        "JourneyUpdated",
+                        new { evt.JourneyId },
+                        ct);
+
+                    break;
+                }
+
+            case nameof(JourneyDeleted):
+                {
+                    var evt = JsonSerializer.Deserialize<JourneyDeleted>(msg.Payload)!;
+
+                    await NotifyFavouritersAsync(
+                        evt.JourneyId,
+                        "JourneyDeleted",
+                        new { evt.JourneyId },
+                        ct);
+
+                    break;
+                }
+
+            case nameof(JourneyShared):
+                {
+                    var evt = JsonSerializer.Deserialize<JourneyShared>(msg.Payload)!;
+
+                    await NotifyFavouritersAsync(
+                        evt.JourneyId,
+                        "JourneyShared",
+                        new { evt.JourneyId },
+                        ct);
+
+                    break;
+                }
+
+            default:
+                throw new InvalidOperationException(
+                    $"Unsupported event type: {msg.Type}");
+        }
+    }
+
+    private async Task NotifyUserAsync(
+    Guid userId,
+    string eventType,
+    object payload)
+    {
+        if (_presence.IsOnline(userId))
+        {
+            await _notifier.NotifyAsync(userId, eventType, payload);
+        }
+        else
+        {
+            await _email.SendAsync(
+                userId,
+                "Journey update",
+                $"Event: {eventType}");
+        }
+    }
+
+    private async Task NotifyFavouritersAsync(
+        Guid journeyId,
+        string eventType,
+        object payload,
         CancellationToken ct)
     {
-        IJourneyEvent evt = msg.Type switch
-        {
-            nameof(JourneyUpdated) =>
-                JsonSerializer.Deserialize<JourneyUpdated>(msg.Payload)!,
-
-            nameof(JourneyDeleted) =>
-                JsonSerializer.Deserialize<JourneyDeleted>(msg.Payload)!,
-
-            _ => throw new InvalidOperationException(
-                $"Unsupported event type: {msg.Type}")
-        };
-
-
         var recipients = await _db.JourneyFavourites
-            .Where(x => x.JourneyId == evt.JourneyId)
+            .Where(x => x.JourneyId == journeyId)
             .Select(x => x.UserId)
             .Distinct()
             .ToListAsync(ct);
 
         foreach (var userId in recipients)
         {
-            if (_presence.IsOnline(userId))
-            {
-                await _notifier.NotifyAsync(
-                    userId,
-                    msg.Type,
-                    new { evt.JourneyId });
-            }
-            else
-            {
-                await _email.SendAsync(
-                    userId,
-                    "Journey update",
-                    $"Journey {evt.JourneyId} was updated");
-            }
+            await NotifyUserAsync(userId, eventType, payload);
         }
     }
+
 }

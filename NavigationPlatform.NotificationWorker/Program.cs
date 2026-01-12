@@ -19,8 +19,19 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(
         builder.Configuration.GetConnectionString("Redis")!));
 builder.Services.AddSingleton<IUserPresence, RedisUserPresence>(); // or stub
-builder.Services.AddSingleton<ISignalRNotifier, SignalRNotifier>(_ =>
-    new SignalRNotifier(builder.Configuration["SignalR:HubUrl"]!));
+
+builder.Services.AddSingleton<ISignalRNotifier>(sp =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var hubUrl = cfg["SignalR:HubUrl"];
+
+    if (string.IsNullOrWhiteSpace(hubUrl))
+        throw new InvalidOperationException("SignalR HubUrl is not configured");
+
+    return new SignalRNotifier(hubUrl);
+});
+
+
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
 // ---------- Processing ----------

@@ -2,13 +2,16 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using NavigationPlatform.Api.Auth;
 using NavigationPlatform.Api.Contracts.Journeys;
 using NavigationPlatform.Api.Realtime;
+using NavigationPlatform.Api.Realtime.Hubs;
 using NavigationPlatform.Api.Realtime.Presence;
 using NavigationPlatform.Application.Abstractions.Identity;
 using NavigationPlatform.Application.Journeys.Commands;
@@ -52,15 +55,19 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
-        o.Authority = builder.Configuration["Auth:Authority"];
-        o.Audience = builder.Configuration["Auth:Audience"];
+        // MUST match `iss` in token
+        o.Authority = builder.Configuration["Auth:AuthorityPublic"];
         o.RequireHttpsMetadata = false;
+
+        // FORCE metadata/JWKS retrieval via Docker DNS
+        o.MetadataAddress =
+            $"{builder.Configuration["Auth:AuthorityInternal"]}/.well-known/openid-configuration";
 
         o.TokenValidationParameters = new TokenValidationParameters
         {
+            NameClaimType = "sub",
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Auth:Authority"],
-
+            ValidIssuer = builder.Configuration["Auth:AuthorityPublic"],
             ValidateAudience = true,
             ValidAudiences = new[]
             {
@@ -171,11 +178,52 @@ app.Use(async (ctx, next) =>
 
 app.UseHttpsRedirection();
 
+// ----------- Error Handling -----------
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var feature = context.Features.Get<IExceptionHandlerFeature>();
+        var exception = feature?.Error;
+
+        var correlationId = context.TraceIdentifier;
+
+        context.Response.ContentType = "application/problem+json";
+
+        var (status, title) = exception switch
+        {
+            InvalidOperationException => (StatusCodes.Status400BadRequest, "Invalid operation"),
+            ArgumentException => (StatusCodes.Status400BadRequest, "Invalid argument"),
+            _ => (StatusCodes.Status500InternalServerError, "Internal server error")
+        };
+
+        context.Response.StatusCode = status;
+
+        var problem = new ProblemDetails
+        {
+            Status = status,
+            Title = title,
+            Detail = "An unexpected error occurred.",
+            Instance = context.Request.Path,
+            Extensions =
+            {
+                ["correlationId"] = correlationId
+            }
+        };
+
+        await context.Response.WriteAsJsonAsync(problem);
+    });
+});
+
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseRateLimiter();
 app.MapHub<JourneyHub>("/hubs/journeys");
+app.MapHub<NotificationsHub>("/hubs/notifications")
+   .RequireAuthorization();
+app.MapHub<InternalNotificationHub>("/hubs/internal-notifications");
 
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -191,8 +239,7 @@ app.MapPost("/api/journeys",
     {
         var id = await mediator.Send(cmd, ct);
         return TypedResults.Created($"/api/journeys/{id}", id);
-    })
-    .RequireAuthorization();
+    }).RequireAuthorization();
 
 app.MapPost("/api/journeys/{id:guid}/favorite",
     async (Guid id, IMediator mediator, CancellationToken ct) =>
@@ -256,14 +303,15 @@ app.MapGet("/public/journeys/{linkId:guid}",
     });
 
 app.MapGet("/api/journeys",
-    async (
-        IMediator mediator,
-        CancellationToken ct,
-        int page = 1,
-        int pageSize = 20) =>
+    async (IMediator mediator, CancellationToken ct, [FromQuery] int page, [FromQuery] int pageSize) =>
     {
         if (page <= 0 || pageSize <= 0 || pageSize > 100)
-            return Results.BadRequest("Invalid paging parameters");
+            return Results.BadRequest(new
+            {
+                error = "Invalid paging parameters",
+                page,
+                pageSize
+            });
 
         return Results.Ok(
             await mediator.Send(
