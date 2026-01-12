@@ -1,4 +1,4 @@
-﻿namespace NavigationPlatform.Api.Realtime;
+﻿namespace NavigationPlatform.Api.Realtime.Presence;
 
 public interface IUserPresenceWriter
 {

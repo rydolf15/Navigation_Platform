@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using NavigationPlatform.Api.Auth;
 using NavigationPlatform.Api.Contracts.Journeys;
 using NavigationPlatform.Api.Realtime;
+using NavigationPlatform.Api.Realtime.Presence;
 using NavigationPlatform.Application.Abstractions.Identity;
 using NavigationPlatform.Application.Journeys.Commands;
 using NavigationPlatform.Application.Journeys.Queries;
@@ -255,15 +256,22 @@ app.MapGet("/public/journeys/{linkId:guid}",
     });
 
 app.MapGet("/api/journeys",
-    async (int page, int pageSize, IMediator mediator, CancellationToken ct) =>
+    async (
+        IMediator mediator,
+        CancellationToken ct,
+        int page = 1,
+        int pageSize = 20) =>
     {
+        if (page <= 0 || pageSize <= 0 || pageSize > 100)
+            return Results.BadRequest("Invalid paging parameters");
+
         return Results.Ok(
             await mediator.Send(
                 new GetJourneysPagedQuery(page, pageSize), ct));
     })
     .RequireAuthorization();
 
-app.MapGet("/api/journeys/{id:guid}",
+app.MapGet("/api/journeys/{id}",
     async (Guid id, IMediator mediator, CancellationToken ct) =>
     {
         var result = await mediator.Send(

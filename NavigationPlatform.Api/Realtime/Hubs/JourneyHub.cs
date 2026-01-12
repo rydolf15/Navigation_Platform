@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR;
-using NavigationPlatform.Api.Realtime;
+using NavigationPlatform.Api.Realtime.Presence;
 
 public sealed class JourneyHub : Hub
 {

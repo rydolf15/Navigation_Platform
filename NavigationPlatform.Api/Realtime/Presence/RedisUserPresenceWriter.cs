@@ -1,6 +1,6 @@
 ﻿using StackExchange.Redis;
 
-namespace NavigationPlatform.Api.Realtime;
+namespace NavigationPlatform.Api.Realtime.Presence;
 
 internal sealed class RedisUserPresenceWriter : IUserPresenceWriter
 {
