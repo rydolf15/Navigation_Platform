@@ -5,11 +5,13 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using NavigationPlatform.Api.Auth;
 using NavigationPlatform.Api.Contracts.Journeys;
 using NavigationPlatform.Api.Realtime;
 using NavigationPlatform.Application.Abstractions.Identity;
 using NavigationPlatform.Application.Journeys.Commands;
+using NavigationPlatform.Application.Journeys.Queries;
 using NavigationPlatform.Infrastructure;
 using NavigationPlatform.Infrastructure.Persistence;
 using NavigationPlatform.Infrastructure.Persistence.Sharing;
@@ -18,6 +20,11 @@ using StackExchange.Redis;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ConfigureHttpsDefaults(_ => { });
+});
 
 // ---------- Logging ----------
 builder.Host.UseSerilog((ctx, lc) =>
@@ -48,14 +55,39 @@ builder.Services
         o.Audience = builder.Configuration["Auth:Audience"];
         o.RequireHttpsMetadata = false;
 
-        // Read JWT from HTTP-only cookie
-        o.EventsType = typeof(CookieJwtBearerEvents);
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Auth:Authority"],
+
+            ValidateAudience = true,
+            ValidAudiences = new[]
+            {
+                "navigation-api",
+                "account"
+            },
+
+            ValidateLifetime = true
+        };
+
+        o.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = ctx =>
+            {
+                if (ctx.Request.Cookies.TryGetValue(
+                    AuthCookies.AccessToken, out var token))
+                {
+                    ctx.Token = token;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
 
 // Required for cookie-based JWT handling
-builder.Services.AddScoped<CookieJwtBearerEvents>();
+//builder.Services.AddScoped<CookieJwtBearerEvents>();
 builder.Services.AddHttpClient();
 
 // ---------- Rate limiting ----------
@@ -136,6 +168,8 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
+app.UseHttpsRedirection();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -146,6 +180,8 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 // ---------- Endpoints ----------
+app.MapAuth();
+
 app.MapPost("/api/journeys",
     async Task<Results<Created<Guid>, BadRequest>> (
         CreateJourneyCommand cmd,
@@ -217,6 +253,30 @@ app.MapGet("/public/journeys/{linkId:guid}",
 
         return Results.Ok(journey);
     });
+
+app.MapGet("/api/journeys",
+    async (int page, int pageSize, IMediator mediator, CancellationToken ct) =>
+    {
+        return Results.Ok(
+            await mediator.Send(
+                new GetJourneysPagedQuery(page, pageSize), ct));
+    })
+    .RequireAuthorization();
+
+app.MapGet("/api/journeys/{id:guid}",
+    async (Guid id, IMediator mediator, CancellationToken ct) =>
+    {
+        var result = await mediator.Send(
+            new GetJourneyByIdQuery(id), ct);
+
+        return result is null
+            ? Results.NotFound()
+            : Results.Ok(result);
+    })
+    .RequireAuthorization();
+
+
+// ------------------------------------------------
 
 
 app.MapHealthChecks("/healthz");

@@ -2,7 +2,7 @@
 
 namespace NavigationPlatform.NotificationWorker.Messaging;
 
-internal sealed class SignalRNotifier
+internal sealed class SignalRNotifier : ISignalRNotifier
 {
     private readonly HubConnection _connection;
 

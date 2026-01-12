@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NavigationPlatform.Application.Abstractions.Messaging;
 using NavigationPlatform.Application.Abstractions.Persistence;
 using NavigationPlatform.Infrastructure.Persistence;
+using NavigationPlatform.Infrastructure.Persistence.Journeys;
 using NavigationPlatform.Infrastructure.Persistence.Repositories;
 
 namespace NavigationPlatform.Infrastructure;
@@ -17,6 +18,7 @@ public static class DependencyInjection
             o.UseNpgsql(connectionString));
 
         services.AddScoped<IJourneyRepository, JourneyRepository>();
+        services.AddScoped<IJourneyReadRepository, JourneyReadRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;

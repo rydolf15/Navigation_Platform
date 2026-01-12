@@ -10,18 +10,18 @@ internal sealed class NotificationOutboxProcessor
 {
     private readonly NotificationDbContext _db;
     private readonly IUserPresence _presence;
-    private readonly SignalRNotifier _signalr;
+    private readonly ISignalRNotifier _notifier;
     private readonly IEmailSender _email;
 
     public NotificationOutboxProcessor(
         NotificationDbContext db,
         IUserPresence presence,
-        SignalRNotifier signalr,
+        ISignalRNotifier notifier,
         IEmailSender email)
     {
         _db = db;
         _presence = presence;
-        _signalr = signalr;
+        _notifier = notifier;
         _email = email;
     }
 
@@ -72,7 +72,7 @@ internal sealed class NotificationOutboxProcessor
         {
             if (_presence.IsOnline(userId))
             {
-                await _signalr.NotifyAsync(
+                await _notifier.NotifyAsync(
                     userId,
                     msg.Type,
                     new { evt.JourneyId });

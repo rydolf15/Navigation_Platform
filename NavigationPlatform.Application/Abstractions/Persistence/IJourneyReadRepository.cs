@@ -10,4 +10,10 @@ public interface IJourneyReadRepository
         int page,
         int pageSize,
         CancellationToken ct);
+
+    Task<JourneyDto?> GetByIdAsync(
+        Guid journeyId,
+        Guid userId,
+        CancellationToken ct);
+
 }

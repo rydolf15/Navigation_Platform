@@ -8,6 +8,6 @@ public sealed record JourneyDto
     string ArrivalLocation,
     DateTime ArrivalTime,
     string TransportType,
-    double DistanceKm,
+    decimal DistanceKm,
     bool IsDailyGoalAchieved
 );

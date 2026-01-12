@@ -19,7 +19,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(
         builder.Configuration.GetConnectionString("Redis")!));
 builder.Services.AddSingleton<IUserPresence, RedisUserPresence>(); // or stub
-builder.Services.AddSingleton<SignalRNotifier>(_ =>
+builder.Services.AddSingleton<ISignalRNotifier, SignalRNotifier>(_ =>
     new SignalRNotifier(builder.Configuration["SignalR:HubUrl"]!));
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
