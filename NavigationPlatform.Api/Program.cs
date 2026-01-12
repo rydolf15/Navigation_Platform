@@ -14,11 +14,14 @@ using NavigationPlatform.Api.Realtime;
 using NavigationPlatform.Api.Realtime.Hubs;
 using NavigationPlatform.Api.Realtime.Presence;
 using NavigationPlatform.Application.Abstractions.Identity;
+using NavigationPlatform.Application.Abstractions.Rewards;
 using NavigationPlatform.Application.Journeys.Commands;
 using NavigationPlatform.Application.Journeys.Queries;
 using NavigationPlatform.Infrastructure;
 using NavigationPlatform.Infrastructure.Persistence;
+using NavigationPlatform.Infrastructure.Persistence.Rewards;
 using NavigationPlatform.Infrastructure.Persistence.Sharing;
+using NavigationPlatform.Infrastructure.Rewards;
 using Serilog;
 using StackExchange.Redis;
 using System.Threading.RateLimiting;
@@ -49,6 +52,7 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreateJourneyCommand>();
 
 builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("Default")!);
+
 
 // ---------- Auth ----------
 builder.Services
@@ -130,7 +134,14 @@ builder.Services.AddSignalR()
 
 builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 
+builder.Services.AddDbContext<RewardReadDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+
+builder.Services.AddScoped<IDailyGoalStatusReader, DailyGoalStatusReader>();
+
+
 var app = builder.Build();
+
 
 using (var scope = app.Services.CreateScope())
 {
@@ -329,6 +340,12 @@ app.MapGet("/api/journeys/{id}",
             ? Results.NotFound()
             : Results.Ok(result);
     })
+    .RequireAuthorization();
+
+app.MapGet("/api/users/me/daily-goal",
+    async (IMediator mediator, CancellationToken ct) =>
+        Results.Ok(await mediator.Send(
+            new GetDailyGoalStatusQuery(), ct)))
     .RequireAuthorization();
 
 

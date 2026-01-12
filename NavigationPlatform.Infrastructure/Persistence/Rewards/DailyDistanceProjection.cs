@@ -1,4 +1,4 @@
-﻿namespace NavigationPlatform.RewardWorker.Persistence;
+﻿namespace NavigationPlatform.Infrastructure.Persistence.Rewards;
 
 public sealed class DailyDistanceProjection
 {

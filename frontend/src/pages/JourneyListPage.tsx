@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getJourneys } from "../api/journeys";
 import type { JourneyDto } from "../api/journeys";
 import { JourneyCard } from "../components/JourneyCard";
+import { DailyGoalBadge } from "../components/DailyGoalBadge";
 
 import {
   getJourneysHub,
@@ -22,6 +23,7 @@ export function JourneyListPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [dailyGoalAchieved, setDailyGoalAchieved] = useState(false);
 
   // Data loading (paged)
   useEffect(() => {
@@ -76,6 +78,16 @@ export function JourneyListPage() {
           )
         );
       });
+
+      hub.on("JourneyDailyGoalAchieved", e => {
+        setDailyGoalAchieved(true);
+
+        window.dispatchEvent(
+          new CustomEvent("daily-goal-achieved", {
+            detail: e,
+          })
+        );
+      });
     }
 
     connect();
@@ -110,8 +122,13 @@ export function JourneyListPage() {
       );
     }
 
+    function onDailyGoal() {
+      setDailyGoalAchieved(true);
+    }
+
     window.addEventListener("journey:favourite-changed", onFavouriteChanged);
     window.addEventListener("journey:deleted", onDeleted);
+    window.addEventListener("daily-goal-achieved", onDailyGoal);
 
     return () => {
       window.removeEventListener(
@@ -119,12 +136,24 @@ export function JourneyListPage() {
         onFavouriteChanged
       );
       window.removeEventListener("journey:deleted", onDeleted);
+      window.removeEventListener("daily-goal-achieved", onDailyGoal);
     };
   }, []);
+
+  useEffect(() => {
+    fetch("/api/users/me/daily-goal", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.achieved) setDailyGoalAchieved(true);
+      });
+  }, []);
+
+  <DailyGoalBadge achieved={dailyGoalAchieved} />
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
+    
     <main style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
       <h1 style={{ marginBottom: "1rem" }}>Your journeys</h1>
 

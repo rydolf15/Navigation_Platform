@@ -14,3 +14,8 @@ export interface JourneyDeletedEvent {
 export interface JourneySharedEvent {
   journeyId: string;
 }
+
+export interface JourneyDailyGoalAchieved {
+  date: string;
+  totalDistanceKm: number;
+}

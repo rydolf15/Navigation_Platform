@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using NavigationPlatform.RewardWorker.Persistence;
+using NavigationPlatform.Infrastructure.Persistence.Rewards;
 
 internal sealed class DailyDistanceProjectionConfiguration
     : IEntityTypeConfiguration<DailyDistanceProjection>

@@ -34,16 +34,25 @@ internal sealed class NotificationOutboxProcessor
                  x.Type == nameof(JourneyDeleted) ||
                  x.Type == nameof(JourneyFavorited) ||
                  x.Type == nameof(JourneyUnfavorited) ||
-                 x.Type == nameof(JourneyShared)))
+                 x.Type == nameof(JourneyShared) || 
+                 x.Type == nameof(JourneyDailyGoalAchieved)))
             .OrderBy(x => x.OccurredUtc)
             .Take(100)
             .ToListAsync(ct);
 
         foreach (var msg in messages)
         {
-            await HandleAsync(msg, ct);
-            msg.Processed = true;
+            try
+            {
+                await HandleAsync(msg, ct);
+                msg.Processed = true;
+            }
+            catch
+            {
+                throw;
+            }
         }
+
 
         await _db.SaveChangesAsync(ct);
     }
@@ -117,6 +126,23 @@ internal sealed class NotificationOutboxProcessor
                     break;
                 }
 
+            case nameof(JourneyDailyGoalAchieved):
+                {
+                    var evt = JsonSerializer.Deserialize<JourneyDailyGoalAchieved>(msg.Payload)!;
+
+                    await NotifyUserAsync(
+                        evt.UserId,
+                        "JourneyDailyGoalAchieved",
+                        new
+                        {
+                            date = evt.Date,
+                            totalDistanceKm = evt.TotalDistanceKm
+                        });
+
+                    break;
+                }
+
+
             default:
                 throw new InvalidOperationException(
                     $"Unsupported event type: {msg.Type}");
@@ -132,7 +158,7 @@ internal sealed class NotificationOutboxProcessor
         {
             await _notifier.NotifyAsync(userId, eventType, payload);
         }
-        else
+        if (eventType != NotificationEvents.JourneyDailyGoalAchieved)
         {
             await _email.SendAsync(
                 userId,

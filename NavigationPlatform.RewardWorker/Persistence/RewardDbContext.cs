@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using NavigationPlatform.Domain.Common;
 using NavigationPlatform.Infrastructure.Persistence.Outbox;
+using NavigationPlatform.Infrastructure.Persistence.Rewards;
 
 namespace NavigationPlatform.RewardWorker.Persistence;
 
