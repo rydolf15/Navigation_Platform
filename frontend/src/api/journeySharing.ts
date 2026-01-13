@@ -5,7 +5,7 @@ export async function shareJourneyWithUser(
   userId: string
 ): Promise<void> {
   await apiClient.post(`/journeys/${journeyId}/share`, {
-    userId,
+    userIds: [userId],
   });
 }
 
@@ -19,7 +19,7 @@ export async function createPublicShareLink(
 }
 
 export async function revokePublicShareLink(
-  journeyId: string
+  publicLinkId: string
 ): Promise<void> {
-  await apiClient.delete(`/journeys/${journeyId}/public-link`);
+  await apiClient.delete(`/journeys/public-link/${publicLinkId}`);
 }

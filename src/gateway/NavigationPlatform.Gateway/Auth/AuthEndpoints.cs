@@ -27,7 +27,7 @@ public static class AuthEndpoints
                 $"{cfg["Auth:AuthorityPublic"]}/protocol/openid-connect/auth" +
                 $"?client_id={cfg["Auth:ClientId"]}" +
                 $"&response_type=code" +
-                $"&scope=openid profile offline_access" +
+                $"&scope=openid profile" +
                 $"&redirect_uri={Uri.EscapeDataString(cfg["Auth:RedirectUri"]!)}" +
                 $"&code_challenge={challenge}" +
                 $"&code_challenge_method=S256";

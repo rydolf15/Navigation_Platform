@@ -54,7 +54,13 @@ export function ShareJourneyModal({
     setError(null);
 
     try {
-      await revokePublicShareLink(journeyId);
+      const linkId = extractPublicLinkId(publicUrl);
+      if (!linkId) {
+        setError("Invalid public link.");
+        return;
+      }
+
+      await revokePublicShareLink(linkId);
       setPublicUrl(null);
     } catch {
       setError("Failed to revoke link.");
@@ -140,4 +146,12 @@ export function ShareJourneyModal({
       </section>
     </div>
   );
+}
+
+function extractPublicLinkId(url: string | null): string | null {
+  if (!url) return null;
+
+  // Handles URLs like: /public/journeys/{guid} or http(s)://host/public/journeys/{guid}
+  const match = url.match(/\/public\/journeys\/([0-9a-fA-F-]{36})/);
+  return match?.[1] ?? null;
 }

@@ -8,12 +8,20 @@ namespace NavigationPlatform.Gateway.Realtime.Hubs;
 /// </summary>
 public sealed class InternalNotificationHub : Hub
 {
+    private readonly IHubContext<NotificationsHub> _notificationsHub;
+
+    public InternalNotificationHub(IHubContext<NotificationsHub> notificationsHub)
+    {
+        _notificationsHub = notificationsHub;
+    }
+
     public async Task NotifyUser(
         Guid userId,
         string eventType,
         object payload)
     {
-        await Clients.User(userId.ToString())
+        // Relay to browser-connected hub(s). Background services connect only to this internal hub.
+        await _notificationsHub.Clients.User(userId.ToString())
             .SendAsync(eventType, payload);
     }
 }

@@ -25,6 +25,11 @@ export async function ensureSignalRStarted(): Promise<void> {
   const conn = getSignalRConnection();
 
   if (conn.state === HubConnectionState.Disconnected) {
-    await conn.start();
+    try {
+      await conn.start();
+    } catch {
+      // Likely not authenticated yet (401). We'll retry after login (full page reload),
+      // or the next time this function is called.
+    }
   }
 }

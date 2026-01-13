@@ -63,12 +63,9 @@ builder.Services
             NameClaimType = "sub",
             ValidateIssuer = true,
             ValidIssuer = builder.Configuration["Auth:AuthorityPublic"],
-            ValidateAudience = true,
-            ValidAudiences = new[]
-            {
-                "navigation-api",
-                "account"
-            },
+            // Keycloak (by default) does not include an `aud` claim in access tokens for this client.
+            // Validate the client via `azp` in OnTokenValidated instead.
+            ValidateAudience = false,
 
             ValidateLifetime = true
         };
@@ -82,6 +79,20 @@ builder.Services
                     out var cookieToken))
                 {
                     ctx.Token = cookieToken;
+                }
+
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = ctx =>
+            {
+                var expectedClientId = builder.Configuration["Auth:ClientId"];
+                var azp = ctx.Principal?.FindFirst("azp")?.Value;
+
+                if (string.IsNullOrWhiteSpace(expectedClientId) ||
+                    string.IsNullOrWhiteSpace(azp) ||
+                    !string.Equals(azp, expectedClientId, StringComparison.Ordinal))
+                {
+                    ctx.Fail("Invalid token (azp).");
                 }
 
                 return Task.CompletedTask;

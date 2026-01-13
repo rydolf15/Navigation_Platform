@@ -39,7 +39,12 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks();
 
 builder.Services.AddMediatR(cfg =>
-    cfg.RegisterServicesFromAssembly(typeof(CreateJourneyCommand).Assembly));
+{
+    // Application handlers (commands/queries)
+    cfg.RegisterServicesFromAssembly(typeof(CreateJourneyCommand).Assembly);
+    // Infrastructure handlers (some commands are currently handled there)
+    cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
+});
 
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateJourneyCommand>();
@@ -70,14 +75,29 @@ builder.Services
             NameClaimType = "sub",
             ValidateIssuer = true,
             ValidIssuer = builder.Configuration["Auth:AuthorityPublic"],
-            ValidateAudience = true,
-            ValidAudiences = new[]
-            {
-                "navigation-api",
-                "account"
-            },
+            // Keycloak (by default) does not include an `aud` claim in access tokens for this client.
+            // Validate the client via `azp` in OnTokenValidated instead.
+            ValidateAudience = false,
 
             ValidateLifetime = true
+        };
+
+        o.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = ctx =>
+            {
+                var expectedClientId = builder.Configuration["Auth:ClientId"];
+                var azp = ctx.Principal?.FindFirst("azp")?.Value;
+
+                if (string.IsNullOrWhiteSpace(expectedClientId) ||
+                    string.IsNullOrWhiteSpace(azp) ||
+                    !string.Equals(azp, expectedClientId, StringComparison.Ordinal))
+                {
+                    ctx.Fail("Invalid token (azp).");
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 

@@ -148,14 +148,14 @@ export function JourneyListPage() {
       });
   }, []);
 
-  <DailyGoalBadge achieved={dailyGoalAchieved} />
-
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     
     <main style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
       <h1 style={{ marginBottom: "1rem" }}>Your journeys</h1>
+
+      <DailyGoalBadge achieved={dailyGoalAchieved} />
 
       {loading && <p>Loading…</p>}
 
