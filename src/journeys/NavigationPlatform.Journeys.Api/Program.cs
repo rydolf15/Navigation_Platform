@@ -23,6 +23,9 @@ using Npgsql;
 using Serilog;
 using System.Security.Claims;
 using System.Text.Json;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Resources;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +37,20 @@ builder.WebHost.ConfigureKestrel(options =>
 // ---------- Logging ----------
 builder.Host.UseSerilog((ctx, lc) =>
     lc.ReadFrom.Configuration(ctx.Configuration));
+
+// ---------- OpenTelemetry Tracing ----------
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(serviceName: "navigation-journeys-api"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation()
+        .AddJaegerExporter(options =>
+        {
+            options.AgentHost = builder.Configuration["Jaeger:AgentHost"] ?? "jaeger";
+            options.AgentPort = int.Parse(builder.Configuration["Jaeger:AgentPort"] ?? "6831");
+        }));
 
 // ---------- Services ----------
 builder.Services.AddEndpointsApiExplorer();
@@ -403,10 +420,10 @@ app.MapGet("/admin/journeys",
         CancellationToken ct,
         [FromQuery] Guid? userId,
         [FromQuery] string? transportType,
-        [FromQuery] DateTime? startDateFrom,
-        [FromQuery] DateTime? startDateTo,
-        [FromQuery] DateTime? arrivalDateFrom,
-        [FromQuery] DateTime? arrivalDateTo,
+        [FromQuery] string? startDateFrom,
+        [FromQuery] string? startDateTo,
+        [FromQuery] string? arrivalDateFrom,
+        [FromQuery] string? arrivalDateTo,
         [FromQuery] decimal? minDistance,
         [FromQuery] decimal? maxDistance,
         [FromQuery] int page = 1,
@@ -523,6 +540,9 @@ app.MapGet("/api/users/me/daily-goal",
 
 app.MapHealthChecks("/healthz");
 app.MapHealthChecks("/readyz");
+
+app.UseMetricServer();
+app.UseHttpMetrics();
 
 app.Run();
 

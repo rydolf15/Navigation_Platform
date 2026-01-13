@@ -18,11 +18,28 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Yarp.ReverseProxy.Transforms;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Resources;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------- Logging ----------
 builder.Host.UseSerilog((ctx, lc) => lc.ReadFrom.Configuration(ctx.Configuration));
+
+// ---------- OpenTelemetry Tracing ----------
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(serviceName: "navigation-gateway"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddEntityFrameworkCoreInstrumentation()
+        .AddJaegerExporter(options =>
+        {
+            options.AgentHost = builder.Configuration["Jaeger:AgentHost"] ?? "jaeger";
+            options.AgentPort = int.Parse(builder.Configuration["Jaeger:AgentPort"] ?? "6831");
+        }));
 
 // ---------- Services ----------
 builder.Services.AddHealthChecks();
@@ -346,6 +363,9 @@ app.MapHub<InternalNotificationHub>("/hubs/internal-notifications");
 
 app.MapHealthChecks("/healthz");
 app.MapHealthChecks("/readyz");
+
+app.UseMetricServer();
+app.UseHttpMetrics();
 
 app.MapReverseProxy();
 

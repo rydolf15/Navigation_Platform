@@ -1,0 +1,224 @@
+### Navigation Platform API Collection
+### Base URL: http://localhost:5000 (Gateway)
+### All requests go through the Gateway which proxies to Journey Service
+
+@baseUrl = http://localhost:5000
+@journeyId = 00000000-0000-0000-0000-000000000000
+@userId = 00000000-0000-0000-0000-000000000000
+@token = YOUR_ACCESS_TOKEN_HERE
+
+### ============================================
+### Authentication Endpoints (Gateway)
+### ============================================
+
+### Initiate OAuth2 PKCE Login
+GET {{baseUrl}}/api/auth/login
+
+### OAuth2 Callback (handled by browser redirect)
+GET {{baseUrl}}/api/auth/callback?code=CODE&state=STATE
+
+### Logout
+POST {{baseUrl}}/api/auth/logout
+
+### ============================================
+### Journey Endpoints (Requires Authentication)
+### ============================================
+
+### Get all journeys (paginated)
+GET {{baseUrl}}/api/journeys?page=1&pageSize=50
+Authorization: Bearer {{token}}
+
+### Get journey by ID
+GET {{baseUrl}}/api/journeys/{{journeyId}}
+Authorization: Bearer {{token}}
+
+### Create journey
+POST {{baseUrl}}/api/journeys
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "startLocation": "New York, NY",
+  "arrivalLocation": "Boston, MA",
+  "startTime": "2026-01-22T10:00:00Z",
+  "arrivalTime": "2026-01-22T14:30:00Z",
+  "transportType": "Car",
+  "distanceKm": 350.5
+}
+
+### Update journey
+PUT {{baseUrl}}/api/journeys/{{journeyId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "startLocation": "New York, NY",
+  "arrivalLocation": "Boston, MA",
+  "startTime": "2026-01-22T10:00:00Z",
+  "arrivalTime": "2026-01-22T14:30:00Z",
+  "transportType": "Car",
+  "distanceKm": 350.5
+}
+
+### Delete journey
+DELETE {{baseUrl}}/api/journeys/{{journeyId}}
+Authorization: Bearer {{token}}
+
+### ============================================
+### Favorites Endpoints (Requires Authentication)
+### ============================================
+
+### Add journey to favorites
+POST {{baseUrl}}/api/journeys/{{journeyId}}/favorite
+Authorization: Bearer {{token}}
+
+### Remove journey from favorites
+DELETE {{baseUrl}}/api/journeys/{{journeyId}}/favorite
+Authorization: Bearer {{token}}
+
+### ============================================
+### Sharing Endpoints (Requires Authentication)
+### ============================================
+
+### Share journey with users
+POST {{baseUrl}}/api/journeys/{{journeyId}}/share
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "userIds": ["{{userId}}"]
+}
+
+### Get journey share recipients
+GET {{baseUrl}}/api/journeys/{{journeyId}}/share
+Authorization: Bearer {{token}}
+
+### Create public link for journey
+POST {{baseUrl}}/api/journeys/{{journeyId}}/public-link
+Authorization: Bearer {{token}}
+
+### Revoke public link
+DELETE {{baseUrl}}/api/journeys/public-link/{{journeyId}}
+Authorization: Bearer {{token}}
+
+### ============================================
+### Public Endpoints (No Authentication)
+### ============================================
+
+### Get journey by public link ID
+GET {{baseUrl}}/public/journeys/{{journeyId}}
+
+### ============================================
+### Daily Goal Endpoints (Requires Authentication)
+### ============================================
+
+### Get daily goal status
+GET {{baseUrl}}/api/users/me/daily-goal
+Authorization: Bearer {{token}}
+
+### ============================================
+### Admin Endpoints (Requires Admin Role)
+### ============================================
+
+### Get admin journeys with filters
+GET {{baseUrl}}/admin/journeys?UserId={{userId}}&TransportType=Car&StartDateFrom=2026-01-22T00:00:00Z&StartDateTo=2026-01-31T23:59:59Z&ArrivalDateFrom=2026-01-22T00:00:00Z&ArrivalDateTo=2026-01-31T23:59:59Z&MinDistance=0&MaxDistance=1000&Page=1&PageSize=50&OrderBy=StartTime&Direction=desc
+Authorization: Bearer {{token}}
+
+### Get monthly distance statistics
+GET {{baseUrl}}/admin/statistics/monthly-distance?Year=2026&Month=1&Page=1&PageSize=50&OrderBy=TotalDistanceKm&Direction=desc
+Authorization: Bearer {{token}}
+
+### Update user status (Suspended/Deactivated/Active)
+PATCH {{baseUrl}}/admin/users/{{userId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "Suspended"
+}
+
+### ============================================
+### Health & Metrics Endpoints
+### ============================================
+
+### Health check (liveness)
+GET {{baseUrl}}/healthz
+
+### Readiness check
+GET {{baseUrl}}/readyz
+
+### Prometheus metrics
+GET {{baseUrl}}/metrics
+
+### ============================================
+### SignalR Hubs (WebSocket)
+### ============================================
+
+### Journey Hub (for presence)
+### Connect to: ws://localhost:5000/hubs/journeys
+### Requires: Authorization header with Bearer token
+
+### Notifications Hub (for real-time updates)
+### Connect to: ws://localhost:5000/hubs/notifications
+### Requires: Authorization header with Bearer token
+
+### ============================================
+### Example: Complete Journey Workflow
+### ============================================
+
+### 1. Create journey
+# @name createJourney
+POST {{baseUrl}}/api/journeys
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "startLocation": "New York, NY",
+  "arrivalLocation": "Boston, MA",
+  "startTime": "2026-01-22T10:00:00Z",
+  "arrivalTime": "2026-01-22T14:30:00Z",
+  "transportType": "Car",
+  "distanceKm": 350.5
+}
+
+### 2. Get created journey ID from response
+### Use the ID from the Location header or response body
+
+### 3. Add to favorites
+POST {{baseUrl}}/api/journeys/{{journeyId}}/favorite
+Authorization: Bearer {{token}}
+
+### 4. Share with another user
+POST {{baseUrl}}/api/journeys/{{journeyId}}/share
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "userIds": ["{{userId}}"]
+}
+
+### 5. Create public link
+# @name createPublicLink
+POST {{baseUrl}}/api/journeys/{{journeyId}}/public-link
+Authorization: Bearer {{token}}
+
+### 6. Access public link (no auth required)
+GET {{baseUrl}}/public/journeys/{{linkId}}
+
+### 7. Update journey
+PUT {{baseUrl}}/api/journeys/{{journeyId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "startLocation": "New York, NY",
+  "arrivalLocation": "Boston, MA",
+  "startTime": "2026-01-22T10:00:00Z",
+  "arrivalTime": "2026-01-22T15:00:00Z",
+  "transportType": "Car",
+  "distanceKm": 360.0
+}
+
+### 8. Delete journey
+DELETE {{baseUrl}}/api/journeys/{{journeyId}}
+Authorization: Bearer {{token}}

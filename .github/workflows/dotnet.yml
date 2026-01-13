@@ -1,0 +1,148 @@
+name: .NET CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore Navigation_Platform.sln
+
+      - name: Build
+        run: dotnet build Navigation_Platform.sln --no-restore --configuration Release
+
+      - name: Run Roslyn analyzers
+        run: dotnet build Navigation_Platform.sln --no-restore --configuration Release /p:RunAnalyzersDuringBuild=true
+
+      - name: Run StyleCop
+        run: |
+          dotnet tool install -g StyleCop.Analyzers || true
+          dotnet build Navigation_Platform.sln --no-restore --configuration Release /p:RunStyleCop=true || true
+
+      - name: Run tests with coverage
+        run: |
+          dotnet test Navigation_Platform.sln \
+            --no-build \
+            --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            --settings:coverlet.runsettings \
+            --results-directory:./TestResults
+
+      - name: Generate coverage report
+        run: |
+          dotnet tool install -g dotnet-reportgenerator-globaltool || true
+          reportgenerator \
+            -reports:"./TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"./CoverageReport" \
+            -reporttypes:"Html;Badges;JsonSummary"
+
+      - name: Generate coverage badge
+        run: |
+          coverage=$(grep -oP '"linecoverage":\s*\K[0-9.]+' ./CoverageReport/Summary.json | head -1 || echo "0")
+          coverage_percent=$(echo "$coverage" | awk '{printf "%.0f", $1}')
+          echo "Coverage: $coverage_percent%"
+          echo "::set-output name=coverage::$coverage_percent"
+        id: coverage
+
+      - name: Check coverage threshold
+        run: |
+          coverage=$(grep -oP 'line-rate="\K[0-9.]+' ./TestResults/**/coverage.cobertura.xml | head -1 || echo "0")
+          coverage_percent=$(echo "$coverage * 100" | bc)
+          if (( $(echo "$coverage_percent < 80" | bc -l) )); then
+            echo "Coverage $coverage_percent% is below 80% threshold"
+            exit 1
+          fi
+          echo "Coverage: $coverage_percent%"
+
+      - name: Build Docker images
+        run: |
+          docker build -t navigation-gateway:${{ github.sha }} -f src/gateway/NavigationPlatform.Gateway/Dockerfile .
+          docker build -t navigation-journeys-api:${{ github.sha }} -f src/journeys/NavigationPlatform.Journeys.Api/Dockerfile .
+          docker build -t navigation-reward-worker:${{ github.sha }} -f NavigationPlatform.RewardWorker/Dockerfile .
+          docker build -t navigation-notification-worker:${{ github.sha }} -f NavigationPlatform.NotificationWorker/Dockerfile .
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: CoverageReport/
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nav
+          POSTGRES_PASSWORD: nav
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5672:5672
+          - 15672:15672
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Start stack with Docker Compose
+        run: |
+          docker compose up -d --build
+
+      - name: Wait for services
+        run: |
+          timeout 120 bash -c 'until curl -f http://localhost:5000/healthz; do sleep 2; done'
+
+      - name: Run integration tests
+        run: |
+          # Add integration test commands here when available
+          echo "Integration tests would run here"
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down

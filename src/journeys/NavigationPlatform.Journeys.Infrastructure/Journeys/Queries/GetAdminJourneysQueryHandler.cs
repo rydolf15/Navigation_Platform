@@ -32,17 +32,17 @@ public sealed class GetAdminJourneysQueryHandler
             query = query.Where(j => j.TransportType == tt);
         }
 
-        if (request.StartDateFrom.HasValue)
-            query = query.Where(j => j.StartTime >= request.StartDateFrom.Value);
+        if (!string.IsNullOrWhiteSpace(request.StartDateFrom) && TryParseDateTime(request.StartDateFrom, out var startDateFrom))
+            query = query.Where(j => j.StartTime >= startDateFrom);
 
-        if (request.StartDateTo.HasValue)
-            query = query.Where(j => j.StartTime <= request.StartDateTo.Value);
+        if (!string.IsNullOrWhiteSpace(request.StartDateTo) && TryParseDateTime(request.StartDateTo, out var startDateTo))
+            query = query.Where(j => j.StartTime <= startDateTo);
 
-        if (request.ArrivalDateFrom.HasValue)
-            query = query.Where(j => j.ArrivalTime >= request.ArrivalDateFrom.Value);
+        if (!string.IsNullOrWhiteSpace(request.ArrivalDateFrom) && TryParseDateTime(request.ArrivalDateFrom, out var arrivalDateFrom))
+            query = query.Where(j => j.ArrivalTime >= arrivalDateFrom);
 
-        if (request.ArrivalDateTo.HasValue)
-            query = query.Where(j => j.ArrivalTime <= request.ArrivalDateTo.Value);
+        if (!string.IsNullOrWhiteSpace(request.ArrivalDateTo) && TryParseDateTime(request.ArrivalDateTo, out var arrivalDateTo))
+            query = query.Where(j => j.ArrivalTime <= arrivalDateTo);
 
         if (request.MinDistance.HasValue)
             query = query.Where(j => (decimal)j.DistanceKm >= request.MinDistance.Value);
@@ -104,6 +104,23 @@ public sealed class GetAdminJourneysQueryHandler
             .ToListAsync(ct);
 
         return new AdminJourneysResult(items, totalCount, page, pageSize);
+    }
+
+    private static bool TryParseDateTime(string value, out DateTime result)
+    {
+        // Try common ISO 8601 formats including partial times
+        var formats = new[]
+        {
+            "yyyy-MM-ddTHH:mm:ss",
+            "yyyy-MM-ddTHH:mm",
+            "yyyy-MM-ddTHH:mm:ss.fff",
+            "yyyy-MM-ddTHH:mm:ssZ",
+            "yyyy-MM-ddTHH:mmZ",
+            "yyyy-MM-dd"
+        };
+
+        return DateTime.TryParseExact(value, formats, null, System.Globalization.DateTimeStyles.AssumeLocal | System.Globalization.DateTimeStyles.AdjustToUniversal, out result)
+            || DateTime.TryParse(value, out result);
     }
 }
 
