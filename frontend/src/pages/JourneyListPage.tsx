@@ -1,20 +1,12 @@
 import { useEffect, useState } from "react";
-import { getJourneys } from "../api/journeys";
+import { getJourneys, favoriteJourney, unfavoriteJourney } from "../api/journeys";
 import type { JourneyDto } from "../api/journeys";
-import { JourneyCard } from "../components/JourneyCard";
 import { DailyGoalBadge } from "../components/DailyGoalBadge";
-
-import {
-  getJourneysHub,
-  startJourneysHub,
-  stopJourneysHub,
-} from "../realtime/journeysHub";
-
-import type {
-  JourneyUpdatedEvent,
-  JourneyDeletedEvent,
-  JourneyFavouriteChangedEvent,
-} from "../realtime/events";
+import { logout } from "../api/auth";
+import { CreateJourneyModal } from "../components/CreateJourneyModal";
+import { Link } from "react-router-dom";
+import { FavouriteButton } from "../components/FavouriteButton";
+import "../styles/JourneyListPage.css";
 
 const PAGE_SIZE = 10;
 
@@ -24,15 +16,15 @@ export function JourneyListPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [dailyGoalAchieved, setDailyGoalAchieved] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
-  // Data loading (paged)
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       setLoading(true);
       const result = await getJourneys(page, PAGE_SIZE);
-
       if (!cancelled) {
         setJourneys(result.items);
         setTotal(result.totalCount);
@@ -44,105 +36,11 @@ export function JourneyListPage() {
     return () => {
       cancelled = true;
     };
-  }, [page]);
-
-  // Realtime updates (SignalR)
-  useEffect(() => {
-    let cancelled = false;
-    const hub = getJourneysHub();
-
-    async function connect() {
-      await startJourneysHub();
-      if (cancelled) return;
-
-      hub.on("JourneyUpdated", (e: JourneyUpdatedEvent) => {
-        setJourneys(items =>
-          items.map(j =>
-            j.id === e.journeyId ? { ...j } : j
-          )
-        );
-      });
-
-      hub.on("JourneyDeleted", (e: JourneyDeletedEvent) => {
-        setJourneys(items =>
-          items.filter(j => j.id !== e.journeyId)
-        );
-      });
-
-      hub.on("JourneyFavouriteChanged", (e: JourneyFavouriteChangedEvent) => {
-        setJourneys(items =>
-          items.map(j =>
-            j.id === e.journeyId
-              ? { ...j, isFavourite: e.isFavourite }
-              : j
-          )
-        );
-      });
-
-      hub.on("JourneyDailyGoalAchieved", e => {
-        setDailyGoalAchieved(true);
-
-        window.dispatchEvent(
-          new CustomEvent("daily-goal-achieved", {
-            detail: e,
-          })
-        );
-      });
-    }
-
-    connect();
-
-    return () => {
-      cancelled = true;
-      hub.off("JourneyUpdated");
-      hub.off("JourneyDeleted");
-      hub.off("JourneyFavouriteChanged");
-      stopJourneysHub();
-    };
-  }, []);
-
-  useEffect(() => {
-    function onFavouriteChanged(e: Event) {
-      const evt = e as CustomEvent<{ journeyId: string; isFavourite: boolean }>;
-
-      setJourneys(journeys =>
-        journeys.map(j =>
-          j.id === evt.detail.journeyId
-            ? { ...j, isFavourite: evt.detail.isFavourite }
-            : j
-        )
-      );
-    }
-
-    function onDeleted(e: Event) {
-      const evt = e as CustomEvent<{ journeyId: string }>;
-
-      setJourneys(journeys =>
-        journeys.filter(j => j.id !== evt.detail.journeyId)
-      );
-    }
-
-    function onDailyGoal() {
-      setDailyGoalAchieved(true);
-    }
-
-    window.addEventListener("journey:favourite-changed", onFavouriteChanged);
-    window.addEventListener("journey:deleted", onDeleted);
-    window.addEventListener("daily-goal-achieved", onDailyGoal);
-
-    return () => {
-      window.removeEventListener(
-        "journey:favourite-changed",
-        onFavouriteChanged
-      );
-      window.removeEventListener("journey:deleted", onDeleted);
-      window.removeEventListener("daily-goal-achieved", onDailyGoal);
-    };
-  }, []);
+  }, [page, reloadToken]);
 
   useEffect(() => {
     fetch("/api/users/me/daily-goal", { credentials: "include" })
-      .then(r => r.ok ? r.json() : null)
+      .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (data?.achieved) setDailyGoalAchieved(true);
       });
@@ -151,44 +49,117 @@ export function JourneyListPage() {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
-    
-    <main style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
-      <h1 style={{ marginBottom: "1rem" }}>Your journeys</h1>
+    <main className="page">
+      <header className="page-header">
+        <h1>Your journeys</h1>
+
+        <div className="header-actions">
+          <button
+            className="button button-primary"
+            onClick={() => setShowCreate(true)}
+          >
+            Create journey
+          </button>
+
+          <button
+            className="button button-secondary"
+            onClick={() => void logout()}
+          >
+            Log out
+          </button>
+        </div>
+      </header>
 
       <DailyGoalBadge achieved={dailyGoalAchieved} />
+
+      {showCreate && (
+        <CreateJourneyModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => {
+            setPage(1);
+            setReloadToken(x => x + 1);
+          }}
+        />
+      )}
 
       {loading && <p>Loading…</p>}
 
       {!loading && journeys.length === 0 && (
-        <p>No journeys yet.</p>
+        <div className="empty-state">
+          <p>No journeys yet.</p>
+          <p>Create your first journey to get started.</p>
+        </div>
       )}
 
-      {!loading &&
-        journeys.map(j => (
-          <JourneyCard
-            key={j.id}
-            journey={j}
-            onFavouriteToggle={(next) =>
-              setJourneys(items =>
-                items.map(x =>
-                  x.id === j.id ? { ...x, isFavourite: next } : x
-                )
-              )
-            }
-          />
-        ))}
+      {!loading && journeys.length > 0 && (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Journey</th>
+                <th>Distance</th>
+                <th>Transport</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {journeys.map(j => (
+                <tr key={j.id}>
+                  <td>{j.startLocation} → {j.arrivalLocation}</td>
+                  <td>{j.distanceKm} km</td>
+                  <td>{j.transportType}</td>
+                  <td>
+                    <div className="actions-cell">
+                      <Link
+                        to={`/journeys/${j.id}`}
+                        className="icon-button"
+                        title="View details"
+                        aria-label="View journey details"
+                      >
+                        ℹ
+                      </Link>
+
+                      <FavouriteButton
+                        isFavourite={j.isFavourite ?? false}
+                        onToggle={async () => {
+                          const next = !(j.isFavourite ?? false);
+
+                          setJourneys(items =>
+                            items.map(x =>
+                              x.id === j.id ? { ...x, isFavourite: next } : x
+                            )
+                          );
+
+                          try {
+                            next
+                              ? await favoriteJourney(j.id)
+                              : await unfavoriteJourney(j.id);
+                          } catch {
+                            setJourneys(items =>
+                              items.map(x =>
+                                x.id === j.id
+                                  ? { ...x, isFavourite: !next }
+                                  : x
+                              )
+                            );
+                          }
+                        }}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {totalPages > 1 && (
-        <nav
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: "1rem",
-          }}
-        >
+        <nav className="pagination">
           <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="button button-secondary"
             disabled={page === 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
           >
             Previous
           </button>
@@ -198,10 +169,9 @@ export function JourneyListPage() {
           </span>
 
           <button
-            onClick={() =>
-              setPage(p => Math.min(totalPages, p + 1))
-            }
+            className="button button-secondary"
             disabled={page === totalPages}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
           >
             Next
           </button>

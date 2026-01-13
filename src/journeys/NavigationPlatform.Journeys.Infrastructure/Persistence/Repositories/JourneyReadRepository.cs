@@ -3,6 +3,7 @@ using NavigationPlatform.Application.Abstractions.Persistence;
 using NavigationPlatform.Application.Common.Paging;
 using NavigationPlatform.Application.Journeys.Dtos;
 using NavigationPlatform.Infrastructure.Persistence;
+using NavigationPlatform.Infrastructure.Persistence.Sharing;
 using System.Linq;
 
 namespace NavigationPlatform.Infrastructure.Persistence.Journeys;
@@ -24,7 +25,11 @@ internal sealed class JourneyReadRepository : IJourneyReadRepository
     {
         var query = _db.Journeys
             .AsNoTracking()
-            .Where(j => j.UserId == userId);
+            .Where(j =>
+                j.UserId == userId ||
+                _db.Set<JourneyShare>().Any(s =>
+                    s.JourneyId == j.Id &&
+                    s.SharedWithUserId == userId));
 
         var totalCount = await query.CountAsync(ct);
 
@@ -59,7 +64,12 @@ internal sealed class JourneyReadRepository : IJourneyReadRepository
     {
         return await _db.Journeys
             .AsNoTracking()
-            .Where(j => j.Id == journeyId && j.UserId == userId)
+            .Where(j =>
+                j.Id == journeyId &&
+                (j.UserId == userId ||
+                 _db.Set<JourneyShare>().Any(s =>
+                     s.JourneyId == j.Id &&
+                     s.SharedWithUserId == userId)))
             .Select(j => new JourneyDto(
                 j.Id,
                 j.StartLocation,

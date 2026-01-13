@@ -2,6 +2,7 @@ import { RouterProvider } from "react-router-dom";
 import { useEffect } from "react";
 import { router } from "./router";
 import { ensureSignalRStarted, getSignalRConnection } from "./realtime/signalr";
+import { startJourneysHub } from "./realtime/journeysHub";
 import type {
   JourneyFavouriteChangedEvent,
   JourneyUpdatedEvent,
@@ -18,6 +19,14 @@ export function App() {
       if (!mounted) return;
 
       const conn = getSignalRConnection();
+
+      // Presence hub: used by backend to decide whether to fallback to email when offline.
+      // It may fail with 401 before login; ignore and retry on next app load (after auth redirect).
+      try {
+        await startJourneysHub();
+      } catch {
+        // ignore
+      }
 
       conn.on(
         "JourneyFavouriteChanged",

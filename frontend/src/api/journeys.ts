@@ -20,6 +20,15 @@ export interface PagedResult<T> {
   totalCount: number;
 }
 
+export interface CreateJourneyInput {
+  startLocation: string;
+  startTime: string;
+  arrivalLocation: string;
+  arrivalTime: string;
+  transportType: string;
+  distanceKm: number;
+}
+
 export async function getJourneys(
   page: number,
   pageSize: number
@@ -33,6 +42,34 @@ export async function getJourneys(
 export async function getJourneyById(id: string): Promise<JourneyDto> {
   const response = await apiClient.get<JourneyDto>(`/journeys/${id}`);
   return response.data;
+}
+
+export async function createJourney(input: CreateJourneyInput): Promise<string> {
+  const response = await apiClient.post<string>("/journeys", input);
+  return response.data;
+}
+
+export interface UpdateJourneyInput {
+  startLocation: string;
+  startTime: string;
+  arrivalLocation: string;
+  arrivalTime: string;
+  transportType: string;
+  distanceKm: number;
+}
+
+export async function updateJourney(
+  id: string,
+  input: UpdateJourneyInput
+): Promise<void> {
+  await apiClient.put(`/journeys/${id}`, {
+    journeyId: id,
+    ...input,
+  });
+}
+
+export async function deleteJourney(id: string): Promise<void> {
+  await apiClient.delete(`/journeys/${id}`);
 }
 
 export async function favoriteJourney(id: string): Promise<void> {

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  shareJourneyWithUser,
+  getShareRecipients,
   createPublicShareLink,
   revokePublicShareLink,
+  setShareRecipients,
 } from "../api/journeySharing";
 
 interface ShareJourneyModalProps {
@@ -15,21 +16,68 @@ export function ShareJourneyModal({
   onClose,
 }: ShareJourneyModalProps) {
   const [userId, setUserId] = useState("");
+  const [recipients, setRecipients] = useState<string[]>([]);
+  const [loadingRecipients, setLoadingRecipients] = useState(true);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      setLoadingRecipients(true);
+      setError(null);
+
+      try {
+        const userIds = await getShareRecipients(journeyId);
+        if (!mounted) return;
+        setRecipients(userIds);
+      } catch {
+        if (!mounted) return;
+        setError("Failed to load sharing settings.");
+      } finally {
+        if (!mounted) return;
+        setLoadingRecipients(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      mounted = false;
+    };
+  }, [journeyId]);
+
   async function shareWithUser() {
-    if (!userId) return;
+    const trimmed = userId.trim();
+    if (!trimmed) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      await shareJourneyWithUser(journeyId, userId);
+      const next = Array.from(new Set([...recipients, trimmed]));
+      await setShareRecipients(journeyId, next);
+      setRecipients(next);
       setUserId("");
     } catch {
       setError("Failed to share journey.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function unshareUser(recipientUserId: string) {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const next = recipients.filter(x => x !== recipientUserId);
+      await setShareRecipients(journeyId, next);
+      setRecipients(next);
+    } catch {
+      setError("Failed to unshare journey.");
     } finally {
       setLoading(false);
     }
@@ -95,6 +143,30 @@ export function ShareJourneyModal({
         {error && <p role="alert">{error}</p>}
 
         <div style={{ marginBottom: "1rem" }}>
+          <strong>Shared with</strong>
+          {loadingRecipients ? (
+            <p>Loading…</p>
+          ) : recipients.length === 0 ? (
+            <p>Not shared with anyone yet.</p>
+          ) : (
+            <ul style={{ paddingLeft: "1rem" }}>
+              {recipients.map(id => (
+                <li key={id} style={{ marginBottom: 6 }}>
+                  <code>{id}</code>{" "}
+                  <button
+                    onClick={() => unshareUser(id)}
+                    disabled={loading}
+                    style={{ marginLeft: 8 }}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "1rem" }}>
           <label>
             Share with user ID
             <input
@@ -105,7 +177,7 @@ export function ShareJourneyModal({
             />
           </label>
 
-          <button onClick={shareWithUser} disabled={loading}>
+          <button onClick={shareWithUser} disabled={loading || loadingRecipients}>
             Share
           </button>
         </div>

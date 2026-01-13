@@ -3,6 +3,14 @@
   "enabled": true,
   "sslRequired": "external",
   "loginWithEmailAllowed": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Administrator role (admin scope)"
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "navigation-api",
@@ -33,6 +41,19 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": false,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin"]
     }
   ]
 }

@@ -38,7 +38,15 @@ export function RequireAuth({ children }: RequireAuthProps) {
     };
   }, []);
 
-  if (authorized === null) return null;
+  if (authorized === null) {
+    return (
+      <div style={{ padding: "2rem" }}>
+        <p role="status" aria-live="polite">
+          Checking your session…
+        </p>
+      </div>
+    );
+  }
 
   if (!authorized) {
     window.location.href = "/login";

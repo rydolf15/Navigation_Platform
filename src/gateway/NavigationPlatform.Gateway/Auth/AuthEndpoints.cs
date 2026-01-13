@@ -139,8 +139,17 @@ public static class AuthEndpoints
             }
 
             // Clear cookies (local logout)
-            ctx.Response.Cookies.Delete(AuthCookies.AccessToken);
-            ctx.Response.Cookies.Delete(AuthCookies.RefreshToken);
+            var opts = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = false,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+            };
+
+            ctx.Response.Cookies.Delete(AuthCookies.AccessToken, opts);
+            ctx.Response.Cookies.Delete(AuthCookies.RefreshToken, opts);
+
 
             return Results.NoContent();
         }).AllowAnonymous().RequireAuthorization();

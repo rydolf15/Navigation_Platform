@@ -15,11 +15,14 @@ using NavigationPlatform.Application.Journeys.Commands;
 using NavigationPlatform.Application.Journeys.Queries;
 using NavigationPlatform.Infrastructure;
 using NavigationPlatform.Infrastructure.Persistence;
+using NavigationPlatform.Infrastructure.Persistence.Analytics;
 using NavigationPlatform.Infrastructure.Persistence.Rewards;
 using NavigationPlatform.Infrastructure.Persistence.Sharing;
 using NavigationPlatform.Infrastructure.Rewards;
 using Npgsql;
 using Serilog;
+using System.Security.Claims;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,6 +58,7 @@ builder.Services.AddInfrastructure(
 // ---------- Messaging (Outbox -> RabbitMQ) ----------
 builder.Services.AddHostedService<OutboxPublisher>();
 builder.Services.AddHostedService<DailyGoalAchievedConsumer>();
+builder.Services.AddHostedService<MonthlyDistanceProjectionConsumer>();
 
 
 // ---------- Auth ----------
@@ -101,7 +105,14 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(o =>
+{
+    o.AddPolicy("Admin", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireAssertion(ctx => HasRealmRole(ctx.User, "admin"));
+    });
+});
 
 // ---------- Correlation ID ----------
 builder.Services.AddHttpContextAccessor();
@@ -119,6 +130,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var analyticsDb = scope.ServiceProvider.GetRequiredService<AnalyticsDbContext>();
     var rewardsDb = scope.ServiceProvider.GetRequiredService<RewardReadDbContext>();
     var logger = scope.ServiceProvider
         .GetRequiredService<ILogger<Program>>();
@@ -144,6 +156,39 @@ using (var scope = app.Services.CreateScope())
                     reward_granted boolean NOT NULL,
                     CONSTRAINT pk_daily_distance_projection PRIMARY KEY (user_id, date)
                 );
+            """);
+
+            // Admin analytics projection tables (CQRS read model; not covered by migrations)
+            analyticsDb.Database.ExecuteSqlRaw("""
+                CREATE TABLE IF NOT EXISTS analytics_inbox_messages (
+                    id uuid PRIMARY KEY,
+                    type text NOT NULL,
+                    occurred_utc timestamptz NOT NULL,
+                    processed_utc timestamptz NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS journey_distance_projection (
+                    journey_id uuid PRIMARY KEY,
+                    user_id uuid NOT NULL,
+                    year int NOT NULL,
+                    month int NOT NULL,
+                    distance_km numeric(12,2) NOT NULL,
+                    start_time timestamptz NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_journey_distance_projection_user_year_month
+                    ON journey_distance_projection (user_id, year, month);
+
+                CREATE TABLE IF NOT EXISTS monthly_distance_projection (
+                    user_id uuid NOT NULL,
+                    year int NOT NULL,
+                    month int NOT NULL,
+                    total_distance_km numeric(14,2) NOT NULL,
+                    CONSTRAINT pk_monthly_distance_projection PRIMARY KEY (user_id, year, month)
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_monthly_distance_projection_year_month
+                    ON monthly_distance_projection (year, month);
             """);
 
             logger.LogInformation("Database migration completed");
@@ -192,6 +237,9 @@ app.UseExceptionHandler(errorApp =>
 
         var (status, title) = exception switch
         {
+            KeyNotFoundException => (StatusCodes.Status404NotFound, "Not found"),
+            UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "Forbidden"),
+            ValidationException => (StatusCodes.Status400BadRequest, "Validation failed"),
             InvalidOperationException => (StatusCodes.Status400BadRequest, "Invalid operation"),
             ArgumentException => (StatusCodes.Status400BadRequest, "Invalid argument"),
             _ => (StatusCodes.Status500InternalServerError, "Internal server error")
@@ -253,6 +301,30 @@ app.MapPost("/api/journeys/{id:guid}/share",
     {
         await m.Send(new ShareJourneyCommand(id, req.UserIds), ct);
         return Results.NoContent();
+    }).RequireAuthorization();
+
+app.MapGet("/api/journeys/{id:guid}/share",
+    async (Guid id, AppDbContext db, ICurrentUser currentUser, CancellationToken ct) =>
+    {
+        var journey = await db.Journeys
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+
+        if (journey == null)
+            return Results.NotFound();
+
+        // Only owners can manage/view the recipient list.
+        if (journey.UserId != currentUser.UserId)
+            return Results.Forbid();
+
+        var userIds = await db.Set<JourneyShare>()
+            .AsNoTracking()
+            .Where(x => x.JourneyId == id)
+            .OrderBy(x => x.SharedAtUtc)
+            .Select(x => x.SharedWithUserId)
+            .ToListAsync(ct);
+
+        return Results.Ok(new { userIds });
     }).RequireAuthorization();
 
 app.MapPost("/api/journeys/{id:guid}/public-link",
@@ -324,6 +396,121 @@ app.MapGet("/api/journeys/{id}",
     })
     .RequireAuthorization();
 
+app.MapGet("/admin/journeys",
+    async (
+        HttpContext http,
+        IMediator mediator,
+        CancellationToken ct,
+        [FromQuery] Guid? userId,
+        [FromQuery] string? transportType,
+        [FromQuery] DateTime? startDateFrom,
+        [FromQuery] DateTime? startDateTo,
+        [FromQuery] DateTime? arrivalDateFrom,
+        [FromQuery] DateTime? arrivalDateTo,
+        [FromQuery] decimal? minDistance,
+        [FromQuery] decimal? maxDistance,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? orderBy = null,
+        [FromQuery] string? direction = null) =>
+    {
+        if (page <= 0 || pageSize <= 0 || pageSize > 200)
+            return Results.BadRequest(new { error = "Invalid paging parameters", page, pageSize });
+
+        var result = await mediator.Send(
+            new GetAdminJourneysQuery(
+                userId,
+                transportType,
+                startDateFrom,
+                startDateTo,
+                arrivalDateFrom,
+                arrivalDateTo,
+                minDistance,
+                maxDistance,
+                page,
+                pageSize,
+                orderBy,
+                direction),
+            ct);
+
+        http.Response.Headers["XTotalCount"] = result.TotalCount.ToString();
+
+        return Results.Ok(new
+        {
+            items = result.Items,
+            page = result.Page,
+            pageSize = result.PageSize
+        });
+    })
+    .RequireAuthorization("Admin");
+
+app.MapGet("/admin/statistics/monthly-distance",
+    async (
+        AnalyticsDbContext db,
+        CancellationToken ct,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? orderBy = "UserId",
+        [FromQuery] string? direction = "asc") =>
+    {
+        if (page <= 0 || pageSize <= 0 || pageSize > 500)
+            return Results.BadRequest(new { error = "Invalid paging parameters", page, pageSize });
+
+        var query = db.MonthlyDistances.AsNoTracking();
+        var totalCount = await query.CountAsync(ct);
+
+        var asc = string.Equals(direction, "asc", StringComparison.OrdinalIgnoreCase);
+        var desc = string.Equals(direction, "desc", StringComparison.OrdinalIgnoreCase);
+        if (!asc && !desc) return Results.BadRequest(new { error = "Invalid Direction. Use asc or desc." });
+
+        query = (orderBy?.Trim().ToLowerInvariant(), asc) switch
+        {
+            ("totaldistancekm", true) => query.OrderBy(x => x.TotalDistanceKm),
+            ("totaldistancekm", false) => query.OrderByDescending(x => x.TotalDistanceKm),
+            ("userid", true) => query.OrderBy(x => x.UserId),
+            ("userid", false) => query.OrderByDescending(x => x.UserId),
+            (null, _) => query.OrderBy(x => x.UserId),
+            ("", _) => query.OrderBy(x => x.UserId),
+            _ => throw new ArgumentException("Invalid OrderBy.")
+        };
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new
+            {
+                x.UserId,
+                x.Year,
+                x.Month,
+                TotalDistanceKm = x.TotalDistanceKm
+            })
+            .ToListAsync(ct);
+
+        return Results.Ok(new
+        {
+            items,
+            page,
+            pageSize,
+            totalCount
+        });
+    })
+    .RequireAuthorization("Admin");
+
+app.MapPut("/api/journeys/{id:guid}",
+    async (Guid id, UpdateJourneyCommand body, IMediator mediator, CancellationToken ct) =>
+    {
+        // Route id is the source of truth.
+        await mediator.Send(body with { JourneyId = id }, ct);
+        return Results.NoContent();
+    }).RequireAuthorization();
+
+app.MapDelete("/api/journeys/{id:guid}",
+    async (Guid id, IMediator mediator, CancellationToken ct) =>
+    {
+        await mediator.Send(new DeleteJourneyCommand(id), ct);
+        return Results.NoContent();
+    }).RequireAuthorization();
+
 app.MapGet("/api/users/me/daily-goal",
     async (IMediator mediator, CancellationToken ct) =>
         Results.Ok(await mediator.Send(
@@ -338,6 +525,38 @@ app.MapHealthChecks("/healthz");
 app.MapHealthChecks("/readyz");
 
 app.Run();
+
+static bool HasRealmRole(ClaimsPrincipal user, string role)
+{
+    var realmAccess = user.FindFirst("realm_access")?.Value;
+
+    if (!string.IsNullOrWhiteSpace(realmAccess))
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(realmAccess);
+            if (doc.RootElement.TryGetProperty("roles", out var roles) &&
+                roles.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var r in roles.EnumerateArray())
+                {
+                    if (r.ValueKind == JsonValueKind.String &&
+                        string.Equals(r.GetString(), role, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    return user.Claims.Any(c =>
+        (string.Equals(c.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(c.Type, "roles", StringComparison.OrdinalIgnoreCase)) &&
+        string.Equals(c.Value, role, StringComparison.OrdinalIgnoreCase));
+}
 
 static void EnsureDatabaseExists(string connectionString)
 {

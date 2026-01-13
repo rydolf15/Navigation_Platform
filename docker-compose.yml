@@ -57,7 +57,9 @@ services:
       dockerfile: src/gateway/NavigationPlatform.Gateway/Dockerfile
     depends_on:
       - keycloak
+      - postgres
       - redis
+      - rabbitmq
       - journey-service
     ports:
       - "5000:8080"

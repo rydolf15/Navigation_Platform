@@ -5,6 +5,7 @@ using NavigationPlatform.Domain.Journeys.Events;
 using NavigationPlatform.Infrastructure.Persistence;
 using NavigationPlatform.Infrastructure.Persistence.Favourites;
 using NavigationPlatform.Infrastructure.Persistence.Outbox;
+using NavigationPlatform.Infrastructure.Persistence.Sharing;
 
 namespace NavigationPlatform.Application.Journeys.Commands;
 
@@ -22,6 +23,26 @@ public sealed class UnfavoriteJourneyCommandHandler
 
     public async Task Handle(UnfavoriteJourneyCommand cmd, CancellationToken ct)
     {
+        var journey = await _db.Journeys
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == cmd.JourneyId, ct);
+
+        if (journey == null)
+            throw new KeyNotFoundException("Journey not found.");
+
+        // Per-resource access: owner or share recipient only.
+        if (journey.UserId != _user.UserId)
+        {
+            var canAccess = await _db.Set<JourneyShare>()
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.JourneyId == cmd.JourneyId &&
+                    x.SharedWithUserId == _user.UserId, ct);
+
+            if (!canAccess)
+                throw new KeyNotFoundException("Journey not found.");
+        }
+
         var entity = await _db.Set<JourneyFavourite>()
             .FirstOrDefaultAsync(x =>
                 x.JourneyId == cmd.JourneyId &&

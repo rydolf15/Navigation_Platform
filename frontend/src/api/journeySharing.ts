@@ -1,11 +1,21 @@
 import { apiClient } from "./client";
 
-export async function shareJourneyWithUser(
+export async function getShareRecipients(
+  journeyId: string
+): Promise<string[]> {
+  const response = await apiClient.get<{ userIds: string[] }>(
+    `/journeys/${journeyId}/share`
+  );
+
+  return response.data.userIds ?? [];
+}
+
+export async function setShareRecipients(
   journeyId: string,
-  userId: string
+  userIds: string[]
 ): Promise<void> {
   await apiClient.post(`/journeys/${journeyId}/share`, {
-    userIds: [userId],
+    userIds,
   });
 }
 

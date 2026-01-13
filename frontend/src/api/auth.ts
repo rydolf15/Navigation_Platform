@@ -3,10 +3,15 @@ export const login = () => {
 };
 
 export const logout = async () => {
-  await fetch("/api/auth/logout", {
-    method: "POST",
-    credentials: "include",
-  });
-
-  window.location.href = "/";
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    // ignore
+  } finally {
+    // Always route back to the sign-in screen.
+    window.location.href = "/login";
+  }
 };
