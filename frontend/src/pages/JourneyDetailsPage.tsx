@@ -152,7 +152,7 @@ export function JourneyDetailsPage() {
     return (
       <main style={{ padding: "2rem" }}>
         <p role="alert">{error}</p>
-        <Link to="/">Back to journeys</Link>
+        <Link to="/journeys">Back to journeys</Link>
       </main>
     );
   }
@@ -243,7 +243,7 @@ export function JourneyDetailsPage() {
       >
         <div>
           <h1>Journey details</h1>
-          <Link to="/">← Back to journeys</Link>
+          <Link to="/journeys">← Back to journeys</Link>
         </div>
 
         <button

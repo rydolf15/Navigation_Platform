@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NavigationPlatform.Application.Abstractions.Identity;
 using NavigationPlatform.Domain.Journeys.Events;

@@ -3,7 +3,9 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:25.0
     container_name: navigation-keycloak
-    command: start-dev --import-realm
+    # Import realm on startup. Overwrite ensures changes to ops/keycloak/import are applied
+    # even when keycloak_data volume already exists.
+    command: start-dev --import-realm --spi-import-export-strategy=OVERWRITE_EXISTING
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using NavigationPlatform.Application.Abstractions.Persistence;
 using NavigationPlatform.Application.Common.Paging;
 using NavigationPlatform.Application.Journeys.Dtos;

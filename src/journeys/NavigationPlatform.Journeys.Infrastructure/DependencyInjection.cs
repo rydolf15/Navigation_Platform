@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NavigationPlatform.Application.Abstractions.Messaging;
 using NavigationPlatform.Application.Abstractions.Persistence;

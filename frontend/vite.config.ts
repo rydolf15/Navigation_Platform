@@ -20,6 +20,11 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      "/admin": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        secure: false,
+      },
     }
   }
 });
