@@ -1,6 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using NavigationPlatform.Infrastructure.Persistence.Favourites;
 
 namespace NavigationPlatform.NotificationWorker.Persistence;
 
@@ -11,5 +10,8 @@ internal sealed class JourneyFavouriteConfiguration
     {
         builder.ToTable("journey_favourites");
         builder.HasKey(x => new { x.JourneyId, x.UserId });
+
+        builder.Property(x => x.JourneyId).HasColumnName("journey_id");
+        builder.Property(x => x.UserId).HasColumnName("user_id");
     }
 }

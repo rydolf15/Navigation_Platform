@@ -1,26 +1,20 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using NavigationPlatform.Domain.Common;
-using NavigationPlatform.Infrastructure.Persistence.Outbox;
-using NavigationPlatform.Infrastructure.Persistence.Rewards;
+using NavigationPlatform.RewardWorker.Persistence.Outbox;
 
 namespace NavigationPlatform.RewardWorker.Persistence;
 
 internal sealed class RewardDbContext : DbContext
 {
+    public DbSet<DailyDistanceProjection> DailyDistances => Set<DailyDistanceProjection>();
+    public DbSet<JourneyProjection> Journeys => Set<JourneyProjection>();
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
-    public DbSet<DailyDistanceProjection> Projections => Set<DailyDistanceProjection>();
 
     public RewardDbContext(DbContextOptions<RewardDbContext> options)
         : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Ignore<DomainEvent>();
-
-        modelBuilder.ApplyConfigurationsFromAssembly(
-            typeof(NavigationPlatform.Infrastructure.Persistence.AppDbContext).Assembly);
-
-        modelBuilder.ApplyConfigurationsFromAssembly(
-            typeof(RewardDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(RewardDbContext).Assembly);
     }
 }

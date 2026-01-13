@@ -1,25 +1,23 @@
-version: "3.9"
-
 services:
 
   keycloak:
-      image: quay.io/keycloak/keycloak:25.0
-      container_name: navigation-keycloak
-      command: start-dev
-      environment:
-        KEYCLOAK_ADMIN: admin
-        KEYCLOAK_ADMIN_PASSWORD: admin
-      ports:
-        - "8080:8080"
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: navigation-keycloak
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
 
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: navigation
       POSTGRES_USER: nav
       POSTGRES_PASSWORD: nav
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./ops/postgres:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
 
@@ -28,22 +26,36 @@ services:
     ports:
       - "6379:6379"
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
   mailhog:
     image: mailhog/mailhog
     ports:
       - "1025:1025"
       - "8025:8025"
 
-  api:
+  journey-service:
     build:
       context: .
-      dockerfile: NavigationPlatform.Api/Dockerfile
+      dockerfile: src/journeys/NavigationPlatform.Journeys.Api/Dockerfile
     depends_on:
       - postgres
+      - rabbitmq
+    expose:
+      - "8080"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: src/gateway/NavigationPlatform.Gateway/Dockerfile
+    depends_on:
+      - keycloak
       - redis
-      - mailhog
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      - journey-service
     ports:
       - "5000:8080"
 
@@ -52,22 +64,30 @@ services:
       context: .
       dockerfile: NavigationPlatform.RewardWorker/Dockerfile
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
+      - rabbitmq
 
-  notification-worker:
+  notification-service:
     build:
       context: .
       dockerfile: NavigationPlatform.NotificationWorker/Dockerfile
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      mailhog:
-        condition: service_started
+      - postgres
+      - rabbitmq
+      - redis
+      - mailhog
+      - gateway
     environment:
-        SignalR__HubUrl: http://api:8080/hubs/internal-notifications
+      SignalR__HubUrl: http://gateway:8080/hubs/internal-notifications
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - gateway
+    ports:
+      - "5173:80"
 
 volumes:
   pgdata:

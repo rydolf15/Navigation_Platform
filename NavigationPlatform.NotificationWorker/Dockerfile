@@ -1,12 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY NavigationPlatform.Domain/ NavigationPlatform.Domain/
-COPY NavigationPlatform.Application/ NavigationPlatform.Application/
-COPY NavigationPlatform.Infrastructure/ NavigationPlatform.Infrastructure/
-COPY NavigationPlatform.NotificationWorker/ NavigationPlatform.NotificationWorker/
+COPY NavigationPlatform.NotificationWorker/NavigationPlatform.NotificationWorker.csproj NavigationPlatform.NotificationWorker/
+COPY src/journeys/NavigationPlatform.Journeys.Domain/NavigationPlatform.Domain.csproj src/journeys/NavigationPlatform.Journeys.Domain/
 
 RUN dotnet restore NavigationPlatform.NotificationWorker/NavigationPlatform.NotificationWorker.csproj
+
+COPY . .
 RUN dotnet publish NavigationPlatform.NotificationWorker/NavigationPlatform.NotificationWorker.csproj \
     -c Release -o /app/publish 
 

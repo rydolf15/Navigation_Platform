@@ -2,9 +2,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 COPY NavigationPlatform.RewardWorker/NavigationPlatform.RewardWorker.csproj NavigationPlatform.RewardWorker/
-COPY NavigationPlatform.Application/NavigationPlatform.Application.csproj NavigationPlatform.Application/
-COPY NavigationPlatform.Domain/NavigationPlatform.Domain.csproj NavigationPlatform.Domain/
-COPY NavigationPlatform.Infrastructure/NavigationPlatform.Infrastructure.csproj NavigationPlatform.Infrastructure/
+COPY src/journeys/NavigationPlatform.Journeys.Domain/NavigationPlatform.Domain.csproj src/journeys/NavigationPlatform.Journeys.Domain/
 
 RUN dotnet restore NavigationPlatform.RewardWorker/NavigationPlatform.RewardWorker.csproj
 

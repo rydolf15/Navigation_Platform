@@ -1,7 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using NavigationPlatform.Domain.Journeys.Events;
-using NavigationPlatform.Infrastructure.Persistence.Favourites;
-using NavigationPlatform.Infrastructure.Persistence.Outbox;
 using NavigationPlatform.NotificationWorker.Persistence;
 using NavigationPlatform.NotificationWorker.Processing;
 using NavigationPlatform.NotificationWorker.Tests.Fakes;
@@ -25,19 +23,6 @@ public sealed class NotificationOutboxProcessorTests
         using var db = new NotificationDbContext(options);
 
         db.JourneyFavourites.Add(new JourneyFavourite { JourneyId = journeyId, UserId = userA });
-
-        var evt = new JourneyUpdated(journeyId, Guid.NewGuid());
-
-        db.OutboxMessages.Add(new OutboxMessage
-        {
-            Id = Guid.NewGuid(),
-            Type = nameof(JourneyUpdated),
-            Payload = JsonSerializer.Serialize(
-                new JourneyUpdated(journeyId, userA)),
-            OccurredUtc = DateTime.UtcNow,
-            Processed = false
-        });
-
         await db.SaveChangesAsync();
 
         var presence = new FakeUserPresence();
@@ -46,13 +31,20 @@ public sealed class NotificationOutboxProcessorTests
         var signalr = new FakeSignalRNotifier();
         var email = new FakeEmailSender();
 
-        var processor = new NotificationOutboxProcessor(
+        var processor = new NotificationEventProcessor(
             db,
             presence,
             signalr,
             email);
 
-        await processor.ProcessAsync(CancellationToken.None);
+        var msgId = Guid.NewGuid();
+        var evt = new JourneyUpdated(journeyId, userA, DateTime.UtcNow, 1.00m);
+
+        await processor.ProcessAsync(
+            msgId,
+            nameof(JourneyUpdated),
+            JsonSerializer.Serialize(evt),
+            CancellationToken.None);
 
         Assert.Contains(userA, signalr.NotifiedUsers);
         Assert.DoesNotContain(userB, signalr.NotifiedUsers);
