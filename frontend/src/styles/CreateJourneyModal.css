@@ -2,6 +2,7 @@
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,97 +11,127 @@
 
 .modal {
   background: #ffffff;
-  width: 440px;
+  color: #0f172a;
+  /* Ensure native controls (datetime calendar icon, select arrow) render for light surface */
+  color-scheme: light;
+  width: 460px;
   max-width: calc(100vw - 2rem);
-  border-radius: 12px;
-  padding: 1.5rem;
+  border-radius: 14px;
+  padding: 1.6rem;
   box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    0 24px 40px rgba(0, 0, 0, 0.22),
+    0 10px 18px rgba(0, 0, 0, 0.12);
 }
 
 .modal h2 {
   margin: 0 0 1rem;
   font-size: 1.25rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .form-group label {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: #334155;
 }
 
 .form-group input,
 .form-group select {
-  height: 36px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  font-size: 0.9rem;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+/* Datetime calendar icon visibility (Chrome/Safari) */
+.modal input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  /* Force a dark icon on light modal background (native control, can't set color directly) */
+  opacity: 1;
+  filter: invert(1);
+  cursor: pointer;
+}
+
+.modal input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) brightness(0.85);
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
   border-color: #2563eb;
-  box-shadow: 0 0 0 1px #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+/* Custom select arrow with proper right padding */
+.modal select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 40px;
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 14px 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 .error {
   background: #fef2f2;
   color: #991b1b;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.9rem;
   margin-bottom: 12px;
+  border: 1px solid rgba(153, 27, 27, 0.18);
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 10px;
+  margin-top: 18px;
 }
 
-button {
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
+/* Scope buttons to modal only (avoid global side effects) */
+.modal button {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 650;
   cursor: pointer;
+  border: 1px solid transparent;
 }
 
-button.primary {
+.modal button.primary {
   background: #2563eb;
   color: white;
-  border: none;
 }
 
-button.primary:hover {
+.modal button.primary:hover {
   background: #1d4ed8;
 }
 
-button.secondary {
-  background: #2563eb;
-  color: white;
-  border: 1px solid #ffffff;
+.modal button.secondary {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
 }
 
-button.secondary:hover {
-  background: #1d4ed8;
+.modal button.secondary:hover {
+  background: #e2e8f0;
 }
 
-button:disabled {
+.modal button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

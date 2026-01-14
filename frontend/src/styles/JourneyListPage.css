@@ -9,33 +9,36 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
   margin-bottom: 1rem;
 }
 
 .page-header h1 {
   margin: 0;
   font-size: 1.75rem;
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .button {
-  height: 36px;
+  height: 38px;
   padding: 0 14px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .button-primary {
-  background: #2563eb;
+  background: var(--primary-600);
   color: white;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .button-primary:hover {
@@ -43,50 +46,56 @@
 }
 
 .button-secondary {
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .button-secondary:hover {
-  background: #f9fafb;
+  background: var(--surface-2);
 }
 
 .empty-state {
   margin-top: 2rem;
   padding: 2rem;
   text-align: center;
-  border: 1px dashed #e5e7eb;
-  border-radius: 12px;
-  color: #6b7280;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .table-wrapper {
   margin-top: 1rem;
   overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 680px;
 }
 
 thead th {
   text-align: left;
-  padding: 0.75rem;
+  padding: 0.9rem 1rem;
   font-size: 0.85rem;
-  font-weight: 600;
-  color: #374151;
-  border-bottom: 1px solid #e5e7eb;
+  font-weight: 700;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 tbody td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   vertical-align: middle;
 }
 
 tbody tr:hover {
-  background: #f9fafb;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .actions-cell {
@@ -96,11 +105,11 @@ tbody tr:hover {
 }
 
 .icon-button {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  background: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -110,17 +119,18 @@ tbody tr:hover {
 }
 
 .icon-button:hover {
-  background: #f9fafb;
+  background: var(--surface-2);
 }
 
 .pagination {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
   margin-top: 1.5rem;
+  flex-wrap: wrap;
 }
 
 .pagination button {
-  min-width: l
-  80px;
+  min-width: 80px;
 }

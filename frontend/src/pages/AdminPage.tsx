@@ -8,6 +8,7 @@ import {
   type TransportType,
   type UserStatus,
 } from "../api/admin";
+import "../styles/AdminPage.css";
 
 type Tab = "journeys" | "monthly" | "users";
 
@@ -17,7 +18,7 @@ export function AdminPage() {
   const [tab, setTab] = useState<Tab>("journeys");
 
   return (
-    <main style={{ maxWidth: 1100, margin: "2rem auto", padding: "0 1rem" }}>
+    <main className="admin-page" style={{ maxWidth: 1100, margin: "2rem auto", padding: "0 1rem" }}>
       <header
         style={{
           display: "flex",
@@ -241,52 +242,61 @@ function AdminJourneys() {
         </label>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <button
-          type="button"
-          onClick={() => {
-            setPage(1);
-            void load();
-          }}
-          disabled={loading}
-        >
-          Search
-        </button>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 12 }}>
+        <label>
+          <span style={{ visibility: "hidden" }}>Search</span>
+          <button
+            type="button"
+            onClick={() => {
+              setPage(1);
+              void load();
+            }}
+            disabled={loading}
+          >
+            Search
+          </button>
+        </label>
 
         <label>
           OrderBy
-          <select value={orderBy} onChange={(e) => setOrderBy(e.target.value)}>
+          <div className="select-wrapper">
+            <select value={orderBy} onChange={(e) => setOrderBy(e.target.value)}>
             <option value="StartTime">StartTime</option>
             <option value="ArrivalTime">ArrivalTime</option>
             <option value="UserId">UserId</option>
             <option value="TransportType">TransportType</option>
             <option value="DistanceKm">DistanceKm</option>
           </select>
+          </div>
         </label>
 
         <label>
           Direction
-          <select
-            value={direction}
-            onChange={(e) => setDirection(e.target.value as "asc" | "desc")}
-          >
+          <div className="select-wrapper">
+            <select
+              value={direction}
+              onChange={(e) => setDirection(e.target.value as "asc" | "desc")}
+            >
             <option value="asc">asc</option>
             <option value="desc">desc</option>
           </select>
+          </div>
         </label>
 
         <label>
           PageSize
-          <select
-            value={pageSize}
-            onChange={(e) => setPageSize(Number(e.target.value))}
-          >
+          <div className="select-wrapper">
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+            >
             {[10, 25, 50, 100, 200].map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
             ))}
           </select>
+          </div>
         </label>
       </div>
 
@@ -401,32 +411,38 @@ function MonthlyDistance() {
     <section>
       <h2 style={{ marginTop: 0 }}>Monthly distance statistics</h2>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 12 }}>
         <label>
           OrderBy
-          <select value={orderBy} onChange={(e) => setOrderBy(e.target.value as any)}>
+          <div className="select-wrapper">
+            <select value={orderBy} onChange={(e) => setOrderBy(e.target.value as any)}>
             <option value="UserId">UserId</option>
             <option value="TotalDistanceKm">TotalDistanceKm</option>
           </select>
+          </div>
         </label>
 
         <label>
           Direction
-          <select value={direction} onChange={(e) => setDirection(e.target.value as any)}>
+          <div className="select-wrapper">
+            <select value={direction} onChange={(e) => setDirection(e.target.value as any)}>
             <option value="asc">asc</option>
             <option value="desc">desc</option>
           </select>
+          </div>
         </label>
 
         <label>
           PageSize
-          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+          <div className="select-wrapper">
+            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
             {[10, 25, 50, 100, 200, 500].map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
             ))}
           </select>
+          </div>
         </label>
       </div>
 
@@ -527,11 +543,13 @@ function AdminUsers() {
 
         <label>
           Status
-          <select value={status} onChange={(e) => setStatus(e.target.value as UserStatus)}>
+          <div className="select-wrapper">
+            <select value={status} onChange={(e) => setStatus(e.target.value as UserStatus)}>
             <option value="Active">Active</option>
             <option value="Suspended">Suspended</option>
             <option value="Deactivated">Deactivated</option>
           </select>
+          </div>
         </label>
       </div>
 

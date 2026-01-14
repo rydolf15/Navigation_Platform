@@ -1,0 +1,25 @@
+/* Custom select styling for AdminPage only */
+.admin-page select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 3rem;
+}
+
+.admin-page .select-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.admin-page .select-wrapper::after {
+  content: "▾";
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+}

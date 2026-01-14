@@ -154,21 +154,6 @@ export function JourneyDetailsPage() {
     }
   }
 
-  if (loading) {
-    return <main style={{ padding: "2rem" }}>Loading…</main>;
-  }
-
-  if (error) {
-    return (
-      <main style={{ padding: "2rem" }}>
-        <p role="alert">{error}</p>
-        <Link to="/journeys">Back to journeys</Link>
-      </main>
-    );
-  }
-
-  if (!journey) return null;
-
   async function saveEdits() {
     if (!journey || saving) return;
 

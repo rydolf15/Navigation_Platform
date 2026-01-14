@@ -276,7 +276,6 @@ builder.Services.AddAuthorization(o =>
 {
     o.AddPolicy("Admin", policy =>
     {
-        policy.RequireAuthenticatedUser();
         policy.RequireAssertion(ctx =>
         {
             Microsoft.Extensions.Logging.ILogger? log = null;
@@ -286,11 +285,22 @@ builder.Services.AddAuthorization(o =>
                 log = logFactory?.CreateLogger("Auth");
             }
             
+            // Check if user is authenticated
+            if (ctx.User?.Identity?.IsAuthenticated != true)
+            {
+                log?.LogWarning("User is not authenticated");
+                return false;
+            }
+            
             var result = HasRealmRole(ctx.User, "admin", log);
             if (!result && log != null)
             {
                 var allClaims = ctx.User.Claims.Select(c => $"{c.Type}={c.Value}").ToList();
                 log.LogWarning("Admin authorization failed. User claims: {Claims}", string.Join(", ", allClaims));
+            }
+            else if (result && log != null)
+            {
+                log.LogInformation("Admin authorization succeeded");
             }
             return result;
         });
@@ -367,9 +377,29 @@ app.MapAuth();
 app.MapPatch("/admin/users/{id:guid}/status",
     async (Guid id, UpdateUserStatusRequest body, HttpContext http, GatewayDbContext db, KeycloakAdminClient keycloak, CancellationToken ct) =>
     {
-        var actor = http.User.FindFirst("sub")?.Value;
-        if (!Guid.TryParse(actor, out var actorUserId))
+        var logger = http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("AdminEndpoint");
+        logger.LogInformation("Endpoint handler reached. User authenticated: {IsAuthenticated}, Identity: {IdentityName}", 
+            http.User?.Identity?.IsAuthenticated, http.User?.Identity?.Name);
+        
+        // Log all claims for debugging
+        var allClaims = http.User?.Claims.Select(c => $"{c.Type}={c.Value}").ToList() ?? new List<string>();
+        logger.LogInformation("All user claims: {Claims}", string.Join(", ", allClaims));
+        
+        // Try multiple ways to find the sub claim
+        var actor = http.User?.FindFirst("sub")?.Value 
+            ?? http.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? http.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? http.User?.Identity?.Name;
+        
+        logger.LogInformation("Sub claim value: {Sub}", actor);
+        
+        if (string.IsNullOrWhiteSpace(actor) || !Guid.TryParse(actor, out var actorUserId))
+        {
+            logger.LogWarning("Failed to parse sub claim as Guid. Sub: {Sub}. Available claims: {Claims}", actor, string.Join(", ", allClaims));
             return Results.Unauthorized();
+        }
+        
+        logger.LogInformation("Processing status update for user {UserId} to {Status} by actor {ActorUserId}", id, body.Status, actorUserId);
 
         if (!TryNormalizeStatus(body.Status, out var newStatus))
             return Results.BadRequest(new { error = "Invalid status. Use Active, Suspended, or Deactivated." });

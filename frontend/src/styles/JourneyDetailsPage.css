@@ -1,13 +1,14 @@
 .page {
-  max-width: 760px;
+  max-width: 860px;
   margin: 2.5rem auto;
   padding: 0 1rem;
+  color: var(--text);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -21,7 +22,7 @@
 .backLink {
   display: inline-block;
   margin-top: 0.25rem;
-  color: #60a5fa;
+  color: var(--primary);
   text-decoration: none;
 }
 
@@ -30,56 +31,42 @@
 }
 
 .logout {
-  background: transparent;
-  border: 1px solid #374151;
-  color: #e5e7eb;
-  padding: 0.4rem 0.7rem;
-  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
   cursor: pointer;
+  font-weight: 650;
+}
+.logout:hover {
+  background: var(--surface-2);
 }
 
 .card {
-  background: #111827;
-  border: 1px solid #1f2933;
-  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
   padding: 1.25rem;
 }
 
 .kv {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: 140px 1fr;
   row-gap: 0.75rem;
   column-gap: 0.75rem;
 }
 
 .kv strong {
-  color: #9ca3af;
-  font-weight: 500;
+  color: var(--muted);
+  font-weight: 650;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-top: 1.5rem;
-}
-
-button {
-  background: #1f2937;
-  border: 1px solid #374151;
-  color: #e5e7eb;
-  padding: 0.45rem 0.8rem;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #374151;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .danger {
@@ -94,8 +81,9 @@ button:disabled {
   margin-top: 1rem;
   padding: 0.4rem 0.6rem;
   border-radius: 999px;
-  background: #064e3b;
-  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: var(--text);
   font-size: 0.85rem;
 }
 
@@ -106,22 +94,6 @@ button:disabled {
 .editSection h2 {
   font-size: 1rem;
   margin-bottom: 0.75rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.75rem;
-}
-
-.field input,
-.field select {
-  background: #020617;
-  border: 1px solid #374151;
-  color: #e5e7eb;
-  padding: 0.45rem 0.5rem;
-  border-radius: 6px;
 }
 
 .form-group {
@@ -150,11 +122,26 @@ button:disabled {
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 1px #60a5fa;
+  border-color: rgba(59, 130, 246, 0.7);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
 }
 
 .error {
   color: #f87171;
   margin-bottom: 0.5rem;
+}
+
+@media (max-width: 520px) {
+  .kv {
+    grid-template-columns: 1fr;
+    row-gap: 0.25rem;
+  }
+
+  .kv strong {
+    margin-top: 0.6rem;
+  }
+
+  .kv strong:first-child {
+    margin-top: 0;
+  }
 }

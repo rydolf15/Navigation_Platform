@@ -5,6 +5,7 @@ import {
   revokePublicShareLink,
   setShareRecipients,
 } from "../api/journeySharing";
+import "../styles/ShareJourneyModal.css";
 
 interface ShareJourneyModalProps {
   journeyId: string;
@@ -118,26 +119,8 @@ export function ShareJourneyModal({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <section
-        style={{
-          background: "white",
-          padding: "1rem",
-          borderRadius: 6,
-          width: 360,
-        }}
-      >
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <section className="share-modal">
         <h2>Share journey</h2>
 
         {error && <p role="alert">{error}</p>}
