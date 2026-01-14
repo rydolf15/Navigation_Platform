@@ -104,14 +104,25 @@ function AdminJourneys() {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
+  // Helper function to convert datetime-local string to UTC ISO string
+  const toUtcIsoString = (dateTimeLocal: string): string | undefined => {
+    if (!dateTimeLocal) return undefined;
+    // datetime-local format is "YYYY-MM-DDTHH:mm"
+    // Parse as local time and convert to UTC
+    const localDate = new Date(dateTimeLocal);
+    if (isNaN(localDate.getTime())) return undefined;
+    // Return ISO string in UTC (ends with Z)
+    return localDate.toISOString();
+  };
+
   const query = useMemo(
     () => ({
       userId: userId.trim() || undefined,
       transportType: transportType || undefined,
-      startDateFrom: startDateFrom || undefined,
-      startDateTo: startDateTo || undefined,
-      arrivalDateFrom: arrivalDateFrom || undefined,
-      arrivalDateTo: arrivalDateTo || undefined,
+      startDateFrom: toUtcIsoString(startDateFrom),
+      startDateTo: toUtcIsoString(startDateTo),
+      arrivalDateFrom: toUtcIsoString(arrivalDateFrom),
+      arrivalDateTo: toUtcIsoString(arrivalDateTo),
       minDistance: minDistance || undefined,
       maxDistance: maxDistance || undefined,
       page,

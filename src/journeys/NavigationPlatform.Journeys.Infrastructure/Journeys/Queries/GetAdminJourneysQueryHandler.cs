@@ -110,7 +110,13 @@ public sealed class GetAdminJourneysQueryHandler
     private static bool TryParseDateTime(string value, out DateTime result)
     {
         // We always return a UTC DateTime to avoid Npgsql failures when querying timestamptz columns.
-        // If the caller does not specify an offset, we assume UTC.
+        // If the value contains a timezone indicator (Z or +/- offset), we parse it with that timezone.
+        // Otherwise, we assume the value is in local time (from datetime-local input) and convert to UTC.
+
+        // Check if the value has an explicit timezone indicator
+        var hasExplicitTimezone = value.EndsWith("Z", StringComparison.OrdinalIgnoreCase)
+            || (value.Contains("+") && value.IndexOf('+') > 10) // + after the date part (e.g., "2026-01-14T18:52+01:00")
+            || (value.Contains("-") && value.Length > 16 && value.LastIndexOf('-') > 10 && !value.EndsWith("-")); // - for timezone offset
 
         // Try common ISO 8601 formats including partial times
         var formats = new[]
@@ -123,20 +129,50 @@ public sealed class GetAdminJourneysQueryHandler
             "yyyy-MM-dd"
         };
 
-        if (DateTimeOffset.TryParseExact(
-                value,
-                formats,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var dto)
-            || DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out dto))
+        if (hasExplicitTimezone)
         {
-            result = dto.UtcDateTime;
-            return true;
+            // Value has explicit timezone, parse with timezone support
+            if (DateTimeOffset.TryParseExact(
+                    value,
+                    formats,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out var dto)
+                || DateTimeOffset.TryParse(
+                    value,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out dto))
+            {
+                result = dto.UtcDateTime;
+                return true;
+            }
+        }
+        else
+        {
+            // Value has no timezone info, assume it's local time (from datetime-local input) and convert to UTC
+            if (DateTimeOffset.TryParseExact(
+                    value,
+                    formats,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeLocal,
+                    out var dtoLocal))
+            {
+                result = dtoLocal.ToUniversalTime().DateTime;
+                return true;
+            }
+
+            // Fallback: try with DateTime
+            if (DateTime.TryParseExact(
+                    value,
+                    formats,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeLocal,
+                    out var dt))
+            {
+                result = dt.ToUniversalTime();
+                return true;
+            }
         }
 
         result = default;
