@@ -3,6 +3,7 @@ using NavigationPlatform.Application.Abstractions.Persistence;
 using NavigationPlatform.Application.Common.Paging;
 using NavigationPlatform.Application.Journeys.Dtos;
 using NavigationPlatform.Infrastructure.Persistence;
+using NavigationPlatform.Infrastructure.Persistence.Favourites;
 using NavigationPlatform.Infrastructure.Persistence.Sharing;
 using System.Linq;
 
@@ -45,7 +46,10 @@ internal sealed class JourneyReadRepository : IJourneyReadRepository
                 j.ArrivalTime,
                 j.TransportType.ToString(),
                 j.DistanceKm.Value,
-                j.IsDailyGoalAchieved
+                j.IsDailyGoalAchieved,
+                _db.Set<JourneyFavourite>().Any(f =>
+                    f.JourneyId == j.Id &&
+                    f.UserId == userId)
             ))
             .ToListAsync(ct);
 
@@ -78,7 +82,10 @@ internal sealed class JourneyReadRepository : IJourneyReadRepository
                 j.ArrivalTime,
                 j.TransportType.ToString(),
                 j.DistanceKm,
-                j.IsDailyGoalAchieved
+                j.IsDailyGoalAchieved,
+                _db.Set<JourneyFavourite>().Any(f =>
+                    f.JourneyId == j.Id &&
+                    f.UserId == userId)
             ))
             .FirstOrDefaultAsync(ct);
     }

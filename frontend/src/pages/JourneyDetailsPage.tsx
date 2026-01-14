@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   deleteJourney,
@@ -21,6 +21,7 @@ export function JourneyDetailsPage() {
   const [journey, setJourney] = useState<JourneyDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const [favourite, setFavourite] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,6 +38,13 @@ export function JourneyDetailsPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!id) {
       setError("Invalid journey id.");
       setLoading(false);
@@ -48,7 +56,7 @@ export function JourneyDetailsPage() {
     async function load(journeyId: string) {
       try {
         const data = await getJourneyById(journeyId);
-        if (!cancelled) {
+        if (!cancelled && mountedRef.current) {
           setJourney(data);
           setFavourite(data.isFavourite ?? false);
           setEditStartLocation(data.startLocation ?? "");
@@ -60,7 +68,7 @@ export function JourneyDetailsPage() {
           setLoading(false);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && mountedRef.current) {
           setError("Failed to load journey.");
           setLoading(false);
         }
@@ -197,6 +205,8 @@ export function JourneyDetailsPage() {
       });
 
       const refreshed = await getJourneyById(journey.id);
+      if (!mountedRef.current) return;
+
       setJourney(refreshed);
       setFavourite(refreshed.isFavourite ?? false);
       setEditing(false);
@@ -204,6 +214,31 @@ export function JourneyDetailsPage() {
       window.dispatchEvent(
         new CustomEvent("journey:updated", { detail: { journeyId: journey.id } })
       );
+
+      // Daily goal achievement is computed asynchronously by a background worker.
+      // If this journey was the one that crossed the threshold, it may be marked shortly after.
+      if (!refreshed.isDailyGoalAchieved) {
+        void (async () => {
+          const maxAttempts = 6;
+          const retryDelayMs = 750;
+
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+
+            try {
+              const latest = await getJourneyById(journey.id);
+              if (!mountedRef.current) return;
+
+              setJourney(latest);
+              setFavourite(prev => latest.isFavourite ?? prev);
+
+              if (latest.isDailyGoalAchieved) return;
+            } catch {
+              // ignore
+            }
+          }
+        })();
+      }
     } catch {
       setEditError("Failed to save changes.");
     } finally {

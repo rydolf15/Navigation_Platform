@@ -43,12 +43,40 @@ export function JourneyListPage() {
   }, [page, reloadToken]);
 
   useEffect(() => {
-    fetch("/api/users/me/daily-goal", { credentials: "include" })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (data?.achieved) setDailyGoalAchieved(true);
-      });
-  }, []);
+    let cancelled = false;
+
+    async function loadDailyGoal() {
+      // The reward is computed asynchronously by a background worker.
+      // Retry a few times so the UI updates shortly after create/edit.
+      const maxAttempts = 5;
+      const retryDelayMs = 750;
+
+      for (let attempt = 1; attempt <= maxAttempts && !cancelled; attempt++) {
+        try {
+          const r = await fetch("/api/users/me/daily-goal", { credentials: "include" });
+          if (!r.ok) throw new Error("Failed to load daily goal status");
+
+          const data = await r.json();
+          const achieved = Boolean(data?.achieved);
+          if (!cancelled) setDailyGoalAchieved(achieved);
+
+          if (achieved) return;
+        } catch {
+          // Keep the current state on transient failures.
+        }
+
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        }
+      }
+    }
+
+    void loadDailyGoal();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadToken]);
 
   // Listen for journey notifications
   useEffect(() => {

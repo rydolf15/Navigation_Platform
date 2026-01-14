@@ -120,6 +120,9 @@ static async Task EnsureSchemaAsync(string connectionString, CancellationToken c
                     granted_by_journey_id uuid NULL,
                     CONSTRAINT pk_daily_distance_projection PRIMARY KEY (user_id, date)
                 );
+
+                ALTER TABLE daily_distance_projection
+                    ADD COLUMN IF NOT EXISTS granted_by_journey_id uuid NULL;
             """;
 
             await using var cmd = new NpgsqlCommand(sql, conn);

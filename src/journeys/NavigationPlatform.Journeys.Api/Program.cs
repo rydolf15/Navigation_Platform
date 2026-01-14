@@ -171,8 +171,12 @@ using (var scope = app.Services.CreateScope())
                     date date NOT NULL,
                     total_distance_km numeric(5,2) NOT NULL,
                     reward_granted boolean NOT NULL,
+                    granted_by_journey_id uuid NULL,
                     CONSTRAINT pk_daily_distance_projection PRIMARY KEY (user_id, date)
                 );
+
+                ALTER TABLE daily_distance_projection
+                    ADD COLUMN IF NOT EXISTS granted_by_journey_id uuid NULL;
             """);
 
             // Admin analytics projection tables (CQRS read model; not covered by migrations)
