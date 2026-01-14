@@ -113,6 +113,13 @@ static async Task EnsureSchemaAsync(string connectionString, CancellationToken c
                     CONSTRAINT pk_journey_favourites PRIMARY KEY (journey_id, user_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS journey_shares (
+                    journey_id uuid NOT NULL,
+                    shared_with_user_id uuid NOT NULL,
+                    shared_at_utc timestamptz NOT NULL,
+                    CONSTRAINT pk_journey_shares PRIMARY KEY (journey_id, shared_with_user_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS inbox_messages (
                     id uuid PRIMARY KEY,
                     type text NOT NULL,

@@ -35,12 +35,14 @@ export function App() {
         );
 
         conn.on("JourneyUpdated", (evt: JourneyUpdatedEvent) => {
+          console.log("[SignalR] JourneyUpdated event received:", evt);
           window.dispatchEvent(
             new CustomEvent("journey:updated", { detail: evt })
           );
         });
 
         conn.on("JourneyDeleted", (evt: JourneyDeletedEvent) => {
+          console.log("[SignalR] JourneyDeleted event received:", evt);
           window.dispatchEvent(
             new CustomEvent("journey:deleted", { detail: evt })
           );

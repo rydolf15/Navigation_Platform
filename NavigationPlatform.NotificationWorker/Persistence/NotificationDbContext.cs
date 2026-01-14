@@ -5,6 +5,7 @@ namespace NavigationPlatform.NotificationWorker.Persistence;
 internal sealed class NotificationDbContext : DbContext
 {
     public DbSet<JourneyFavourite> JourneyFavourites => Set<JourneyFavourite>();
+    public DbSet<JourneyShare> JourneyShares => Set<JourneyShare>();
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
     public NotificationDbContext(DbContextOptions<NotificationDbContext> options)
