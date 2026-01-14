@@ -16,6 +16,16 @@ public sealed class Journey : AggregateRoot
 
     private Journey() { }
 
+    private static DateTime EnsureUtc(DateTime value)
+        => value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            // We treat timezone-less values as UTC to avoid Npgsql failures when persisting to timestamptz.
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+
     public static Journey Create(
         Guid userId,
         string startLocation,
@@ -25,6 +35,9 @@ public sealed class Journey : AggregateRoot
         TransportType transportType,
         DistanceKm distanceKm)
     {
+        startTime = EnsureUtc(startTime);
+        arrivalTime = EnsureUtc(arrivalTime);
+
         var journey = new Journey
         {
             UserId = userId,
@@ -53,9 +66,9 @@ public sealed class Journey : AggregateRoot
         DistanceKm distanceKm)
     {
         StartLocation = startLocation;
-        StartTime = startTime;
+        StartTime = EnsureUtc(startTime);
         ArrivalLocation = arrivalLocation;
-        ArrivalTime = arrivalTime;
+        ArrivalTime = EnsureUtc(arrivalTime);
         TransportType = transportType;
         DistanceKm = distanceKm;
 

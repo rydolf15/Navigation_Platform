@@ -14,19 +14,27 @@ public sealed class JourneyHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        var userId = Guid.Parse(
-            Context.User!.FindFirst("sub")!.Value);
-
-        await _presence.SetOnlineAsync(userId);
+        if (Context.User?.Identity?.IsAuthenticated == true)
+        {
+            var subClaim = Context.User.FindFirst("sub");
+            if (subClaim != null && Guid.TryParse(subClaim.Value, out var userId))
+            {
+                await _presence.SetOnlineAsync(userId);
+            }
+        }
         await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var userId = Guid.Parse(
-            Context.User!.FindFirst("sub")!.Value);
-
-        await _presence.SetOfflineAsync(userId);
+        if (Context.User?.Identity?.IsAuthenticated == true)
+        {
+            var subClaim = Context.User.FindFirst("sub");
+            if (subClaim != null && Guid.TryParse(subClaim.Value, out var userId))
+            {
+                await _presence.SetOfflineAsync(userId);
+            }
+        }
         await base.OnDisconnectedAsync(exception);
     }
 

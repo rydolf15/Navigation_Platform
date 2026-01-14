@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using NavigationPlatform.Api.Contracts.Journeys;
+using NavigationPlatform.Api.Converters;
 using NavigationPlatform.Api.Middleware;
 using NavigationPlatform.Api.Messaging;
 using NavigationPlatform.Application.Abstractions.Identity;
@@ -57,6 +58,21 @@ builder.Services.AddOpenTelemetry()
 // ---------- Services ----------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Configure JSON options to handle DateTime properly - treat Unspecified as UTC
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    options.SerializerOptions.Converters.Add(new DateTimeUtcConverter());
+    options.SerializerOptions.Converters.Add(new NullableDateTimeUtcConverter());
+});
+
+builder.Services.Configure<JsonOptions>(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    options.JsonSerializerOptions.Converters.Add(new DateTimeUtcConverter());
+    options.JsonSerializerOptions.Converters.Add(new NullableDateTimeUtcConverter());
+});
 
 builder.Services.AddHealthChecks();
 

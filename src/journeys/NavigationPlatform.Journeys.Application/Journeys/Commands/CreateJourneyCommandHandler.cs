@@ -25,12 +25,29 @@ public sealed class CreateJourneyCommandHandler
 
     public async Task<Guid> Handle(CreateJourneyCommand request, CancellationToken ct)
     {
+        // Ensure UTC conversion as safety measure (JSON converter should handle this, but this provides defense in depth)
+        var startTime = request.StartTime.Kind switch
+        {
+            DateTimeKind.Utc => request.StartTime,
+            DateTimeKind.Local => request.StartTime.ToUniversalTime(),
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(request.StartTime, DateTimeKind.Utc),
+            _ => DateTime.SpecifyKind(request.StartTime, DateTimeKind.Utc)
+        };
+        
+        var arrivalTime = request.ArrivalTime.Kind switch
+        {
+            DateTimeKind.Utc => request.ArrivalTime,
+            DateTimeKind.Local => request.ArrivalTime.ToUniversalTime(),
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(request.ArrivalTime, DateTimeKind.Utc),
+            _ => DateTime.SpecifyKind(request.ArrivalTime, DateTimeKind.Utc)
+        };
+        
         var journey = Journey.Create(
             _currentUser.UserId,
             request.StartLocation,
-            request.StartTime,
+            startTime,
             request.ArrivalLocation,
-            request.ArrivalTime,
+            arrivalTime,
             Enum.Parse<TransportType>(request.TransportType),
             new DistanceKm(request.DistanceKm));
 

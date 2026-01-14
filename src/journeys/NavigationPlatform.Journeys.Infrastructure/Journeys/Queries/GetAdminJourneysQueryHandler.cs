@@ -4,6 +4,7 @@ using NavigationPlatform.Application.Journeys.Dtos;
 using NavigationPlatform.Application.Journeys.Queries;
 using NavigationPlatform.Domain.Journeys;
 using NavigationPlatform.Infrastructure.Persistence;
+using System.Globalization;
 
 namespace NavigationPlatform.Infrastructure.Journeys.Queries;
 
@@ -108,19 +109,38 @@ public sealed class GetAdminJourneysQueryHandler
 
     private static bool TryParseDateTime(string value, out DateTime result)
     {
+        // We always return a UTC DateTime to avoid Npgsql failures when querying timestamptz columns.
+        // If the caller does not specify an offset, we assume UTC.
+
         // Try common ISO 8601 formats including partial times
         var formats = new[]
         {
             "yyyy-MM-ddTHH:mm:ss",
             "yyyy-MM-ddTHH:mm",
             "yyyy-MM-ddTHH:mm:ss.fff",
-            "yyyy-MM-ddTHH:mm:ssZ",
-            "yyyy-MM-ddTHH:mmZ",
+            "yyyy-MM-ddTHH:mm:ss'Z'",
+            "yyyy-MM-ddTHH:mm'Z'",
             "yyyy-MM-dd"
         };
 
-        return DateTime.TryParseExact(value, formats, null, System.Globalization.DateTimeStyles.AssumeLocal | System.Globalization.DateTimeStyles.AdjustToUniversal, out result)
-            || DateTime.TryParse(value, out result);
+        if (DateTimeOffset.TryParseExact(
+                value,
+                formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dto)
+            || DateTimeOffset.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out dto))
+        {
+            result = dto.UtcDateTime;
+            return true;
+        }
+
+        result = default;
+        return false;
     }
 }
 

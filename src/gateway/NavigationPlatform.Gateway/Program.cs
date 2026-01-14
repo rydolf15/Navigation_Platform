@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using NavigationPlatform.Gateway.Admin;
 using NavigationPlatform.Gateway.Auth;
 using NavigationPlatform.Gateway.Middleware;
@@ -128,6 +129,90 @@ builder.Services
                     return;
                 }
 
+                // Extract realm roles from token payload and add them as role claims
+                // Keycloak sends realm_access as a JSON object: {"roles": ["admin", ...]}
+                // The JWT handler might not extract nested JSON objects, so we read the token payload directly
+                try
+                {
+                    var logger = ctx.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Auth");
+                    
+                    // Try to get realm_access from claim first (JWT handler might have extracted it)
+                    var realmAccessClaim = ctx.Principal?.FindFirst("realm_access");
+                    string? realmAccessJson = null;
+                    
+                    if (realmAccessClaim != null && !string.IsNullOrWhiteSpace(realmAccessClaim.Value))
+                    {
+                        realmAccessJson = realmAccessClaim.Value;
+                        logger.LogDebug("Found realm_access in claims: {RealmAccess}", realmAccessJson);
+                    }
+                    // If not found in claims, try to read from token payload directly
+                    else if (ctx.SecurityToken is System.IdentityModel.Tokens.Jwt.JwtSecurityToken jwtToken)
+                    {
+                        // JwtSecurityToken has a Payload property that contains all claims
+                        if (jwtToken.Payload.TryGetValue("realm_access", out var realmAccessObj) && realmAccessObj != null)
+                        {
+                            // realm_access might be stored as a JsonElement or Dictionary, try to serialize it
+                            if (realmAccessObj is System.Text.Json.JsonElement jsonElement)
+                            {
+                                realmAccessJson = jsonElement.GetRawText();
+                            }
+                            else
+                            {
+                                // Try to serialize as JSON
+                                realmAccessJson = System.Text.Json.JsonSerializer.Serialize(realmAccessObj);
+                            }
+                            logger.LogDebug("Found realm_access in token payload: {RealmAccess}", realmAccessJson);
+                        }
+                        else
+                        {
+                            logger.LogWarning("realm_access not found in token payload. Available keys: {Keys}", 
+                                string.Join(", ", jwtToken.Payload.Keys));
+                        }
+                    }
+                    
+                    if (!string.IsNullOrWhiteSpace(realmAccessJson))
+                    {
+                        using var doc = JsonDocument.Parse(realmAccessJson);
+                        if (doc.RootElement.TryGetProperty("roles", out var roles) &&
+                            roles.ValueKind == JsonValueKind.Array)
+                        {
+                            var identity = ctx.Principal?.Identity as ClaimsIdentity;
+                            if (identity != null)
+                            {
+                                var rolesAdded = new List<string>();
+                                foreach (var role in roles.EnumerateArray())
+                                {
+                                    if (role.ValueKind == JsonValueKind.String)
+                                    {
+                                        var roleValue = role.GetString();
+                                        if (!string.IsNullOrWhiteSpace(roleValue))
+                                        {
+                                            // Add as both ClaimTypes.Role and "roles" for compatibility
+                                            identity.AddClaim(new Claim(ClaimTypes.Role, roleValue));
+                                            identity.AddClaim(new Claim("roles", roleValue));
+                                            rolesAdded.Add(roleValue);
+                                        }
+                                    }
+                                }
+                                logger.LogInformation("Added {Count} roles to identity: {Roles}", rolesAdded.Count, string.Join(", ", rolesAdded));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        logger.LogWarning("realm_access JSON is null or empty");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var logger = ctx.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Auth");
+                    logger.LogError(ex, "Failed to extract realm_access roles from token");
+                }
+
                 // Enforce user status (A3): if suspended/deactivated, fail auth immediately.
                 try
                 {
@@ -192,7 +277,23 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("Admin", policy =>
     {
         policy.RequireAuthenticatedUser();
-        policy.RequireAssertion(ctx => HasRealmRole(ctx.User, "admin"));
+        policy.RequireAssertion(ctx =>
+        {
+            Microsoft.Extensions.Logging.ILogger? log = null;
+            if (ctx.Resource is HttpContext httpContext)
+            {
+                var logFactory = httpContext.RequestServices?.GetService<ILoggerFactory>();
+                log = logFactory?.CreateLogger("Auth");
+            }
+            
+            var result = HasRealmRole(ctx.User, "admin", log);
+            if (!result && log != null)
+            {
+                var allClaims = ctx.User.Claims.Select(c => $"{c.Type}={c.Value}").ToList();
+                log.LogWarning("Admin authorization failed. User claims: {Claims}", string.Join(", ", allClaims));
+            }
+            return result;
+        });
     });
 });
 
@@ -330,8 +431,30 @@ app.MapReverseProxy();
 
 app.Run();
 
-static bool HasRealmRole(ClaimsPrincipal user, string role)
+static bool HasRealmRole(ClaimsPrincipal user, string role, Microsoft.Extensions.Logging.ILogger? logger = null)
 {
+    // First check: Look for roles we added as ClaimTypes.Role or "roles" claims
+    // (These are added in OnTokenValidated from realm_access)
+    var roleClaims = user.Claims
+        .Where(c => string.Equals(c.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(c.Type, "roles", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    
+    if (logger != null)
+    {
+        logger.LogDebug("Checking for role '{Role}'. Found {Count} role claims: {Roles}", 
+            role, roleClaims.Count, string.Join(", ", roleClaims.Select(c => $"{c.Type}={c.Value}")));
+    }
+    
+    var hasRole = roleClaims.Any(c => string.Equals(c.Value, role, StringComparison.OrdinalIgnoreCase));
+    
+    if (hasRole)
+    {
+        logger?.LogInformation("Found role '{Role}' in role claims", role);
+        return true;
+    }
+
+    // Second check: Try to parse realm_access claim if it exists
     // Keycloak realm roles are typically in: realm_access.roles = ["admin", ...]
     var realmAccess = user.FindFirst("realm_access")?.Value;
 
@@ -347,24 +470,21 @@ static bool HasRealmRole(ClaimsPrincipal user, string role)
                 {
                     if (r.ValueKind == JsonValueKind.String &&
                         string.Equals(r.GetString(), role, StringComparison.OrdinalIgnoreCase))
+                    {
+                        logger?.LogInformation("Found role '{Role}' in realm_access claim", role);
                         return true;
+                    }
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore parse errors; fall back below
+            logger?.LogWarning(ex, "Failed to parse realm_access claim");
         }
     }
 
-    // Fallback: some setups map roles directly as repeated "roles" claims.
-    return user.Claims.Any(c =>
-        string.Equals(c.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(c.Type, "roles", StringComparison.OrdinalIgnoreCase))
-      && user.Claims.Any(c =>
-        (string.Equals(c.Type, ClaimTypes.Role, StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(c.Type, "roles", StringComparison.OrdinalIgnoreCase)) &&
-        string.Equals(c.Value, role, StringComparison.OrdinalIgnoreCase));
+    logger?.LogWarning("Role '{Role}' not found in user claims", role);
+    return false;
 }
 
 static bool TryNormalizeStatus(string? input, out string normalized)
