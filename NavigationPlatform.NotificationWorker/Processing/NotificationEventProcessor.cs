@@ -89,14 +89,8 @@ internal sealed class NotificationEventProcessor
                 {
                     var evt = JsonSerializer.Deserialize<JourneyUpdated>(payloadJson)!;
 
-                    // Notify both favoriters and shared recipients
+                    // Only notify favoriters (requirement: only favoriting users receive notifications)
                     await NotifyFavouritersAsync(
-                        evt.JourneyId,
-                        NotificationEvents.JourneyUpdated,
-                        new { evt.JourneyId },
-                        ct);
-
-                    await NotifySharedRecipientsAsync(
                         evt.JourneyId,
                         NotificationEvents.JourneyUpdated,
                         new { evt.JourneyId },
@@ -108,6 +102,13 @@ internal sealed class NotificationEventProcessor
             case nameof(JourneyDeleted):
                 {
                     var evt = JsonSerializer.Deserialize<JourneyDeleted>(payloadJson)!;
+
+                    // Get favoriters before deleting (we need to notify them)
+                    var favouriterUserIds = await _db.JourneyFavourites
+                        .Where(x => x.JourneyId == evt.JourneyId)
+                        .Select(x => x.UserId)
+                        .Distinct()
+                        .ToListAsync(ct);
 
                     // Delete all journey_favourites entries for this journeyId
                     var favourites = await _db.JourneyFavourites
@@ -121,18 +122,16 @@ internal sealed class NotificationEventProcessor
                         .ToListAsync(ct);
                     _db.Set<Persistence.JourneyShare>().RemoveRange(shares);
 
-                    // Notify both favoriters and shared recipients
-                    await NotifyFavouritersAsync(
-                        evt.JourneyId,
-                        NotificationEvents.JourneyDeleted,
-                        new { evt.JourneyId },
-                        ct);
-
-                    await NotifySharedRecipientsAsync(
-                        evt.JourneyId,
-                        NotificationEvents.JourneyDeleted,
-                        new { evt.JourneyId },
-                        ct);
+                    // Only notify favoriters (requirement: only favoriting users receive notifications)
+                    // Note: We notify before deleting from DB, but after getting the list
+                    foreach (var userId in favouriterUserIds)
+                    {
+                        await NotifyUserAsync(
+                            userId,
+                            NotificationEvents.JourneyDeleted,
+                            new { evt.JourneyId },
+                            ct);
+                    }
 
                     break;
                 }
@@ -255,7 +254,6 @@ internal sealed class NotificationEventProcessor
     {
         // Always try SignalR first - it will only send to connected clients
         // SignalR will silently ignore if user is not connected (no exception thrown)
-        // We check presence to decide if we should also send email as backup
         var isOnline = _presence.IsOnline(userId);
         _logger.LogInformation("Notifying user {UserId} of event {EventType}, online: {IsOnline}", userId, eventType, isOnline);
 
@@ -267,11 +265,14 @@ internal sealed class NotificationEventProcessor
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send SignalR notification to user {UserId}, event: {EventType}", userId, eventType);
-            // Continue to email fallback
         }
 
-        // Send email as backup if user is not online
-        if (!isOnline)
+        // Only send emails for important events when user is offline
+        // Real-time events (Updated, Deleted, Unshared) are meant to be real-time only
+        // JourneyShared is important - user needs to know they have access
+        var shouldSendEmail = !isOnline && ShouldSendEmailForEvent(eventType);
+        
+        if (shouldSendEmail)
         {
             try
             {
@@ -286,6 +287,33 @@ internal sealed class NotificationEventProcessor
                 _logger.LogError(ex, "Failed to send email notification to user {UserId}, event: {EventType}", userId, eventType);
             }
         }
+        else if (!isOnline)
+        {
+            _logger.LogDebug("Skipping email for event {EventType} - real-time event, user {UserId} is offline", eventType, userId);
+        }
+    }
+
+    private static bool ShouldSendEmailForEvent(string eventType)
+    {
+        // Send emails for important events when users are offline (fallback)
+        // JourneyShared: User needs to know they have access to a journey
+        // JourneyDailyGoalAchieved: Important milestone
+        // JourneyFavorited: User might want to know their journey was favorited
+        // JourneyUpdated: Fallback email if user is offline (requirement)
+        // JourneyDeleted: Fallback email if user is offline (requirement)
+        // 
+        // Don't send emails for:
+        // - JourneyUnshared: Real-time event only
+        // - JourneyFavouriteChanged: Real-time UI update only
+        return eventType switch
+        {
+            NotificationEvents.JourneyShared => true,
+            NotificationEvents.JourneyDailyGoalAchieved => true,
+            NotificationEvents.JourneyFavorited => true,
+            NotificationEvents.JourneyUpdated => true,  // Fallback email requirement
+            NotificationEvents.JourneyDeleted => true,  // Fallback email requirement
+            _ => false
+        };
     }
 
     private async Task NotifyFavouritersAsync(

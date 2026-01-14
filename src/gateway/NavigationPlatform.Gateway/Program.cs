@@ -107,6 +107,19 @@ builder.Services
         {
             OnMessageReceived = ctx =>
             {
+                // SignalR WebSocket connections: extract token from query string
+                var path = ctx.Request.Path;
+                if (path.StartsWithSegments("/hubs"))
+                {
+                    var accessToken = ctx.Request.Query["access_token"].ToString();
+                    if (!string.IsNullOrEmpty(accessToken))
+                    {
+                        ctx.Token = accessToken;
+                        return Task.CompletedTask;
+                    }
+                }
+
+                // HTTP requests: extract token from cookies
                 if (ctx.Request.Cookies.TryGetValue(
                     AuthCookies.AccessToken,
                     out var cookieToken))
@@ -324,10 +337,19 @@ builder.Services.AddRateLimiter(o =>
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(
-        builder.Configuration.GetConnectionString("Redis")!));
-builder.Services.AddScoped<IUserPresenceWriter, RedisUserPresenceWriter>();
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<ConnectionMultiplexer>>();
+    var connectionString = builder.Configuration.GetConnectionString("Redis")!;
+    logger.LogInformation("Connecting to Redis at {ConnectionString}", connectionString);
+    return ConnectionMultiplexer.Connect(connectionString);
+});
+builder.Services.AddScoped<IUserPresenceWriter>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    var logger = sp.GetRequiredService<ILogger<RedisUserPresenceWriter>>();
+    return new RedisUserPresenceWriter(redis, logger);
+});
 
 var app = builder.Build();
 

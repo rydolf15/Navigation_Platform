@@ -31,11 +31,13 @@ public sealed class NotificationOutboxProcessorTests
         var signalr = new FakeSignalRNotifier();
         var email = new FakeEmailSender();
 
+        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<NotificationEventProcessor>.Instance;
         var processor = new NotificationEventProcessor(
             db,
             presence,
             signalr,
-            email);
+            email,
+            logger);
 
         var msgId = Guid.NewGuid();
         var evt = new JourneyUpdated(journeyId, userA, DateTime.UtcNow, 1.00m);
@@ -73,11 +75,13 @@ public sealed class NotificationOutboxProcessorTests
         var signalr = new FakeSignalRNotifier();
         var email = new FakeEmailSender();
 
+        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<NotificationEventProcessor>.Instance;
         var processor = new NotificationEventProcessor(
             db,
             presence,
             signalr,
-            email);
+            email,
+            logger);
 
         var msgId = Guid.NewGuid();
         var evt = new JourneyDeleted(journeyId, userA, DateTime.UtcNow, 1.00m);
