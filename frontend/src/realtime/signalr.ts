@@ -36,9 +36,14 @@ export async function ensureSignalRStarted(): Promise<void> {
   if (conn.state === HubConnectionState.Disconnected) {
     try {
       await conn.start();
-    } catch {
+      console.log("[SignalR] Connection started successfully, state:", conn.state);
+    } catch (err) {
+      console.warn("[SignalR] Failed to start connection:", err);
       // Likely not authenticated yet (401). We'll retry after login (full page reload),
       // or the next time this function is called.
+      throw err;
     }
+  } else {
+    console.log("[SignalR] Connection already in state:", conn.state);
   }
 }

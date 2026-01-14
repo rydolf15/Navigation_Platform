@@ -47,12 +47,14 @@ export function App() {
         });
 
         conn.on("JourneyShared", (evt: JourneySharedEvent) => {
+          console.log("[SignalR] JourneyShared event received:", evt);
           window.dispatchEvent(
             new CustomEvent("journey:shared", { detail: evt })
           );
         });
 
         conn.on("JourneyUnshared", (evt: JourneyUnsharedEvent) => {
+          console.log("[SignalR] JourneyUnshared event received:", evt);
           window.dispatchEvent(
             new CustomEvent("journey:unshared", { detail: evt })
           );
@@ -77,6 +79,7 @@ export function App() {
       try {
         await ensureSignalRStarted();
         if (!mounted) return;
+        console.log("[SignalR] Notifications connection established, state:", conn.state);
       } catch (err) {
         console.warn("SignalR notifications connection failed, will retry:", err);
         // Connection will be retried automatically by withAutomaticReconnect()

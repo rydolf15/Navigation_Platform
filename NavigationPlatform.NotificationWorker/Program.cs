@@ -33,12 +33,13 @@ builder.Services.AddSingleton<IUserPresence, RedisUserPresence>(); // or stub
 builder.Services.AddSingleton<ISignalRNotifier>(sp =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
+    var logger = sp.GetRequiredService<ILogger<SignalRNotifier>>();
     var hubUrl = cfg["SignalR:HubUrl"];
 
     if (string.IsNullOrWhiteSpace(hubUrl))
         throw new InvalidOperationException("SignalR HubUrl is not configured");
 
-    return new SignalRNotifier(hubUrl);
+    return new SignalRNotifier(hubUrl, logger);
 });
 
 

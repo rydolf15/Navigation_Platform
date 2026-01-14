@@ -12,17 +12,20 @@ internal sealed class NotificationEventProcessor
     private readonly IUserPresence _presence;
     private readonly ISignalRNotifier _notifier;
     private readonly IEmailSender _email;
+    private readonly ILogger<NotificationEventProcessor> _logger;
 
     public NotificationEventProcessor(
         NotificationDbContext db,
         IUserPresence presence,
         ISignalRNotifier notifier,
-        IEmailSender email)
+        IEmailSender email,
+        ILogger<NotificationEventProcessor> logger)
     {
         _db = db;
         _presence = presence;
         _notifier = notifier;
         _email = email;
+        _logger = logger;
     }
 
     public async Task ProcessAsync(
@@ -207,16 +210,39 @@ internal sealed class NotificationEventProcessor
 
     private async Task NotifyUserAsync(Guid userId, string eventType, object payload, CancellationToken ct)
     {
-        if (_presence.IsOnline(userId))
+        // Always try SignalR first - it will only send to connected clients
+        // SignalR will silently ignore if user is not connected (no exception thrown)
+        // We check presence to decide if we should also send email as backup
+        var isOnline = _presence.IsOnline(userId);
+        _logger.LogInformation("Notifying user {UserId} of event {EventType}, online: {IsOnline}", userId, eventType, isOnline);
+
+        try
         {
             await _notifier.NotifyAsync(userId, eventType, payload);
-            return;
+            _logger.LogDebug("SignalR notification sent to user {UserId}, event: {EventType}", userId, eventType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send SignalR notification to user {UserId}, event: {EventType}", userId, eventType);
+            // Continue to email fallback
         }
 
-        await _email.SendAsync(
-            userId,
-            "Journey notification",
-            $"Event: {eventType}");
+        // Send email as backup if user is not online
+        if (!isOnline)
+        {
+            try
+            {
+                await _email.SendAsync(
+                    userId,
+                    "Journey notification",
+                    $"Event: {eventType}");
+                _logger.LogDebug("Email notification sent to user {UserId}, event: {EventType}", userId, eventType);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send email notification to user {UserId}, event: {EventType}", userId, eventType);
+            }
+        }
     }
 
     private async Task NotifyFavouritersAsync(
