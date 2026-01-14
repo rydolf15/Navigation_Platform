@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { getJourneys, favoriteJourney, unfavoriteJourney } from "../api/journeys";
+import { getJourneys, favoriteJourney, unfavoriteJourney, getJourneyById } from "../api/journeys";
 import type { JourneyDto } from "../api/journeys";
 import { DailyGoalBadge } from "../components/DailyGoalBadge";
 import { logout } from "../api/auth";
 import { CreateJourneyModal } from "../components/CreateJourneyModal";
 import { Link } from "react-router-dom";
 import { FavouriteButton } from "../components/FavouriteButton";
+import { NotificationToast, type Notification } from "../components/NotificationToast";
 import "../styles/JourneyListPage.css";
+import "../styles/NotificationToast.css";
 
 const PAGE_SIZE = 10;
 
@@ -18,6 +20,8 @@ export function JourneyListPage() {
   const [dailyGoalAchieved, setDailyGoalAchieved] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +50,112 @@ export function JourneyListPage() {
       });
   }, []);
 
+  // Listen for journey notifications
+  useEffect(() => {
+    let cancelled = false;
+
+    async function handleJourneyUpdated(e: Event) {
+      const evt = e as CustomEvent<{ journeyId: string }>;
+      if (cancelled) return;
+
+      try {
+        const journey = await getJourneyById(evt.detail.journeyId);
+        const journeyName = `${journey.startLocation} → ${journey.arrivalLocation}`;
+        
+        const notification: Notification = {
+          id: `updated-${evt.detail.journeyId}-${Date.now()}`,
+          type: "updated",
+          journeyId: evt.detail.journeyId,
+          journeyName,
+          timestamp: new Date(),
+          read: false,
+        };
+
+        setNotifications(prev => [notification, ...prev]);
+        setReloadToken(x => x + 1); // Refresh journey list
+      } catch {
+        // Journey might not exist or user doesn't have access
+      }
+    }
+
+    async function handleJourneyDeleted(e: Event) {
+      const evt = e as CustomEvent<{ journeyId: string }>;
+      if (cancelled) return;
+
+      // Try to get journey name from current list
+      const journey = journeys.find(j => j.id === evt.detail.journeyId);
+      const journeyName = journey 
+        ? `${journey.startLocation} → ${journey.arrivalLocation}`
+        : undefined;
+
+      const notification: Notification = {
+        id: `deleted-${evt.detail.journeyId}-${Date.now()}`,
+        type: "deleted",
+        journeyId: evt.detail.journeyId,
+        journeyName,
+        timestamp: new Date(),
+        read: false,
+      };
+
+      setNotifications(prev => [notification, ...prev]);
+      setReloadToken(x => x + 1); // Refresh journey list
+    }
+
+    async function handleJourneyShared(e: Event) {
+      const evt = e as CustomEvent<{ journeyId: string }>;
+      if (cancelled) return;
+
+      try {
+        const journey = await getJourneyById(evt.detail.journeyId);
+        const journeyName = `${journey.startLocation} → ${journey.arrivalLocation}`;
+        
+        const notification: Notification = {
+          id: `shared-${evt.detail.journeyId}-${Date.now()}`,
+          type: "shared",
+          journeyId: evt.detail.journeyId,
+          journeyName,
+          timestamp: new Date(),
+          read: false,
+        };
+
+        setNotifications(prev => [notification, ...prev]);
+        setReloadToken(x => x + 1); // Refresh journey list to show shared journey
+      } catch {
+        // Journey might not exist or user doesn't have access
+      }
+    }
+
+    window.addEventListener("journey:updated", handleJourneyUpdated);
+    window.addEventListener("journey:deleted", handleJourneyDeleted);
+    window.addEventListener("journey:shared", handleJourneyShared);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("journey:updated", handleJourneyUpdated);
+      window.removeEventListener("journey:deleted", handleJourneyDeleted);
+      window.removeEventListener("journey:shared", handleJourneyShared);
+    };
+  }, [journeys]);
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const handleDismissNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const handleMarkAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    setNotifications(prev =>
+      prev.map(n =>
+        n.id === notification.id ? { ...n, read: true } : n
+      )
+    );
+  };
 
   return (
     <main className="page">
@@ -59,6 +168,36 @@ export function JourneyListPage() {
             onClick={() => setShowCreate(true)}
           >
             Create journey
+          </button>
+
+          <button
+            className="button button-secondary"
+            onClick={() => setShowNotificationsDrawer(true)}
+            style={{ position: "relative" }}
+            title="Notifications"
+          >
+            🔔
+            {unreadCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-8px",
+                  right: "-8px",
+                  background: "#dc3545",
+                  color: "white",
+                  borderRadius: "50%",
+                  width: "20px",
+                  height: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                }}
+              >
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -177,6 +316,128 @@ export function JourneyListPage() {
           </button>
         </nav>
       )}
+
+      {/* Notifications Drawer */}
+      <div
+        className={`notifications-drawer ${
+          showNotificationsDrawer ? "notifications-drawer--open" : ""
+        }`}
+      >
+        <div className="notifications-drawer__header">
+          <h2 className="notifications-drawer__title">
+            Notifications {unreadCount > 0 && `(${unreadCount})`}
+          </h2>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            {unreadCount > 0 && (
+              <button
+                className="button button-secondary"
+                onClick={handleMarkAllRead}
+                style={{ fontSize: "0.875rem", padding: "0.25rem 0.5rem" }}
+              >
+                Mark all read
+              </button>
+            )}
+            <button
+              className="notifications-drawer__close"
+              onClick={() => setShowNotificationsDrawer(false)}
+              aria-label="Close notifications"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <div className="notifications-drawer__list">
+          {notifications.length === 0 ? (
+            <p style={{ textAlign: "center", color: "#6c757d", padding: "2rem" }}>
+              No notifications yet
+            </p>
+          ) : (
+            notifications.map(notification => (
+              <div
+                key={notification.id}
+                className={`notification-item ${
+                  !notification.read ? "notification-item--unread" : ""
+                }`}
+                onClick={() => handleNotificationClick(notification)}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <span style={{ fontSize: "1.5rem" }}>
+                    {notification.type === "updated" && "✏️"}
+                    {notification.type === "deleted" && "🗑️"}
+                    {notification.type === "shared" && "🔗"}
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontWeight: notification.read ? 400 : 600 }}>
+                      {notification.type === "updated" &&
+                        `${notification.journeyName || "A journey"} was updated`}
+                      {notification.type === "deleted" &&
+                        `${notification.journeyName || "A journey"} was deleted`}
+                      {notification.type === "shared" &&
+                        `${notification.journeyName || "A journey"} was shared with you`}
+                    </p>
+                    <span style={{ fontSize: "0.75rem", color: "#6c757d" }}>
+                      {formatTime(notification.timestamp)}
+                    </span>
+                  </div>
+                  {!notification.read && (
+                    <span
+                      style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#007bff",
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Overlay for drawer */}
+      {showNotificationsDrawer && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowNotificationsDrawer(false)}
+        />
+      )}
+
+      {/* Toast Notifications */}
+      <div className="notifications-container">
+        {notifications
+          .filter(n => !n.read)
+          .slice(0, 3)
+          .map(notification => (
+            <NotificationToast
+              key={notification.id}
+              notification={notification}
+              onDismiss={handleDismissNotification}
+            />
+          ))}
+      </div>
     </main>
   );
+}
+
+function formatTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+
+  if (diffSecs < 60) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return date.toLocaleDateString();
 }

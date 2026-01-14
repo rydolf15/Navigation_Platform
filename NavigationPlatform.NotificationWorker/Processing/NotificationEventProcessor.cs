@@ -101,11 +101,15 @@ internal sealed class NotificationEventProcessor
                 {
                     var evt = JsonSerializer.Deserialize<JourneyShared>(payloadJson)!;
 
-                    await NotifyFavouritersAsync(
-                        evt.JourneyId,
-                        NotificationEvents.JourneyShared,
-                        new { evt.JourneyId },
-                        ct);
+                    // Only notify if there's a specific user recipient (not public link)
+                    if (evt.SharedWithUserId.HasValue)
+                    {
+                        await NotifyUserAsync(
+                            evt.SharedWithUserId.Value,
+                            NotificationEvents.JourneyShared,
+                            new { evt.JourneyId },
+                            ct);
+                    }
 
                     break;
                 }

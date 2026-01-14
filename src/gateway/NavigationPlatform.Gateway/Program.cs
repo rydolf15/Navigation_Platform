@@ -20,6 +20,7 @@ using System.Threading.RateLimiting;
 using Yarp.ReverseProxy.Transforms;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Exporter;
 using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,10 +36,9 @@ builder.Services.AddOpenTelemetry()
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddEntityFrameworkCoreInstrumentation()
-        .AddJaegerExporter(options =>
+        .AddOtlpExporter(options =>
         {
-            options.AgentHost = builder.Configuration["Jaeger:AgentHost"] ?? "jaeger";
-            options.AgentPort = int.Parse(builder.Configuration["Jaeger:AgentPort"] ?? "6831");
+            options.Endpoint = new Uri(builder.Configuration["Jaeger:OtlpEndpoint"] ?? "http://jaeger:4317");
         }));
 
 // ---------- Services ----------

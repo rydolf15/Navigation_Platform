@@ -1,11 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { App } from "../App";
 
 // Note: Mocks are defined in setup.ts, no need to duplicate here
 
 describe("App", () => {
-  it("renders without crashing", async () => {
+  it("renders without crashing", () => {
     render(<App />);
 
     // The app should render without errors

@@ -12,6 +12,8 @@ import { logout } from "../api/auth";
 import { FavouriteButton } from "../components/FavouriteButton";
 import { ShareJourneyModal } from "../components/ShareJourneyModal";
 import { useNavigate } from "react-router-dom";
+import "../styles/JourneyDetailsPage.css";
+
 
 export function JourneyDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -230,179 +232,112 @@ export function JourneyDetailsPage() {
     }
   }
 
+    if (loading) {
+    return <main className="page">Loading…</main>;
+  }
+
+  if (error) {
+    return (
+      <main className="page">
+        <p role="alert">{error}</p>
+        <Link to="/journeys">Back to journeys</Link>
+      </main>
+    );
+  }
+
+  if (!journey) return null;
+
   return (
-    <main style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
-      <header
-        style={{
-          marginBottom: "1rem",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "1rem",
-        }}
-      >
+    <main className="page">
+      <header className="header">
         <div>
-          <h1>Journey details</h1>
-          <Link to="/journeys">← Back to journeys</Link>
+          <h1 className="title">Journey details</h1>
+          <Link to="/journeys" className="backLink">
+            ← Back to journeys
+          </Link>
         </div>
 
-        <button
-          type="button"
-          onClick={() => void logout()}
-          style={{
-            padding: "0.4rem 0.6rem",
-            borderRadius: 6,
-            border: "1px solid #e5e7eb",
-            background: "white",
-            cursor: "pointer",
-          }}
-        >
+        <button className="logout" onClick={() => void logout()}>
           Log out
         </button>
       </header>
 
-      <section>
-        <p><strong>From:</strong> {journey.startLocation}</p>
-        <p><strong>To:</strong> {journey.arrivalLocation}</p>
-        <p><strong>Distance:</strong> {journey.distanceKm} km</p>
-        <p><strong>Transport:</strong> {journey.transportType}</p>
+      <section className="card">
+        <div className="kv">
+          <strong>From</strong><span>{journey.startLocation}</span>
+          <strong>To</strong><span>{journey.arrivalLocation}</span>
+          <strong>Distance</strong><span>{journey.distanceKm} km</span>
+          <strong>Transport</strong><span>{journey.transportType}</span>
+        </div>
+
+        {journey.isDailyGoalAchieved && (
+          <div className="badge">🏅 Daily distance goal achieved</div>
+        )}
       </section>
 
       {editing && (
-        <section style={{ marginTop: "1rem" }}>
-          <h2 style={{ fontSize: "1rem" }}>Edit journey</h2>
+        <section className="card editSection">
+          <h2>Edit journey</h2>
+          {editError && <p className="error">{editError}</p>}
 
-          {editError && <p role="alert">{editError}</p>}
+          <div className="form-group">
+            <label>Start location</label>
+            <input value={editStartLocation} onChange={e => setEditStartLocation(e.target.value)} />
+          </div>
 
-          <label style={{ display: "block", marginTop: 8 }}>
-            Start location
-            <input
-              value={editStartLocation}
-              onChange={(e) => setEditStartLocation(e.target.value)}
-              style={{ width: "100%" }}
-            />
-          </label>
+          <div className="form-group">
+            <label>Arrival location</label>
+            <input value={editArrivalLocation} onChange={e => setEditArrivalLocation(e.target.value)} />
+          </div>
 
-          <label style={{ display: "block", marginTop: 8 }}>
-            Arrival location
-            <input
-              value={editArrivalLocation}
-              onChange={(e) => setEditArrivalLocation(e.target.value)}
-              style={{ width: "100%" }}
-            />
-          </label>
+          <div className="form-group">
+            <label>Start time</label>
+            <input type="datetime-local" value={editStartTime} onChange={e => setEditStartTime(e.target.value)} />
+          </div>
 
-          <label style={{ display: "block", marginTop: 8 }}>
-            Start time
-            <input
-              type="datetime-local"
-              value={editStartTime}
-              onChange={(e) => setEditStartTime(e.target.value)}
-              style={{ width: "100%" }}
-            />
-          </label>
+          <div className="form-group">
+            <label>Arrival time</label>
+            <input type="datetime-local" value={editArrivalTime} onChange={e => setEditArrivalTime(e.target.value)} />
+          </div>
 
-          <label style={{ display: "block", marginTop: 8 }}>
-            Arrival time
-            <input
-              type="datetime-local"
-              value={editArrivalTime}
-              onChange={(e) => setEditArrivalTime(e.target.value)}
-              style={{ width: "100%" }}
-            />
-          </label>
-
-          <label style={{ display: "block", marginTop: 8 }}>
-            Transport type
-            <select
-              value={editTransportType}
-              onChange={(e) => setEditTransportType(e.target.value)}
-              style={{ width: "100%" }}
-            >
-              {["Car", "Bus", "Train", "Bike", "Walk"].map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
+          <div className="form-group">
+            <label>Transport type</label>
+            <select value={editTransportType} onChange={e => setEditTransportType(e.target.value)}>
+              <option value="Car">Car</option>
+              <option value="Bus">Bus</option>
+              <option value="Train">Train</option>
+              <option value="Bike">Bike</option>
+              <option value="Walk">Walk</option>
             </select>
-          </label>
+          </div>
 
-          <label style={{ display: "block", marginTop: 8 }}>
-            Distance (km)
-            <input
-              inputMode="decimal"
-              value={editDistanceKm}
-              onChange={(e) => setEditDistanceKm(e.target.value)}
-              style={{ width: "100%" }}
-            />
-          </label>
+          <div className="form-group">
+            <label>Distance (km)</label>
+            <input inputMode="decimal" value={editDistanceKm} onChange={e => setEditDistanceKm(e.target.value)} />
+          </div>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="button" onClick={() => void saveEdits()} disabled={saving}>
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false);
-                setEditError(null);
-              }}
-              disabled={saving}
-            >
-              Cancel
-            </button>
+          <div className="actions">
+            <button onClick={saveEdits}>Save</button>
+            <button onClick={() => setEditing(false)}>Cancel</button>
           </div>
         </section>
       )}
 
-      {journey.isDailyGoalAchieved && (
-        <section style={{ marginTop: "1rem" }}>
-          <span role="status">🏅 Daily distance goal achieved</span>
-        </section>
-      )}
+      <div className="actions">
+        <FavouriteButton isFavourite={favourite} onToggle={toggleFavourite} />
+        <button onClick={() => setShowShare(true)}>Share</button>
+        <button onClick={() => setEditing(v => !v)}>Edit</button>
+        <button className="danger" onClick={confirmDelete}>Delete</button>
+      </div>
 
-      <section style={{ marginTop: "1.5rem", display: "flex", gap: "0.5rem" }}>
-        <FavouriteButton
-          isFavourite={favourite}
-          onToggle={toggleFavourite}
-          disabled={saving}
+      {showShare && (
+        <ShareJourneyModal
+          journeyId={journey.id}
+          onClose={() => setShowShare(false)}
         />
-
-        <button type="button" onClick={() => setShowShare(true)}>
-          Share
-        </button>
-          {showShare && journey && (
-            <ShareJourneyModal
-              journeyId={journey.id}
-              onClose={() => setShowShare(false)}
-            />
-          )}
-
-        <button
-          type="button"
-          onClick={() => {
-            setEditing((v) => !v);
-            setEditError(null);
-          }}
-          disabled={saving || deleting}
-        >
-          {editing ? "Close edit" : "Edit"}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => void confirmDelete()}
-          disabled={saving || deleting}
-          style={{ color: "#b91c1c" }}
-        >
-          {deleting ? "Deleting…" : "Delete"}
-        </button>
-
-      </section>
+      )}
     </main>
   );
-
-  
 }
 
 

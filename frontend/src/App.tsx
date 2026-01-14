@@ -7,6 +7,7 @@ import type {
   JourneyFavouriteChangedEvent,
   JourneyUpdatedEvent,
   JourneyDeletedEvent,
+  JourneySharedEvent,
   JourneyDailyGoalAchieved,
 } from "./realtime/events";
 
@@ -48,6 +49,12 @@ export function App() {
       conn.on("JourneyDeleted", (evt: JourneyDeletedEvent) => {
         window.dispatchEvent(
           new CustomEvent("journey:deleted", { detail: evt })
+        );
+      });
+
+      conn.on("JourneyShared", (evt: JourneySharedEvent) => {
+        window.dispatchEvent(
+          new CustomEvent("journey:shared", { detail: evt })
         );
       });
 

@@ -27,9 +27,9 @@ The application will be available at:
 - **Frontend**: http://localhost:5173
 - **Gateway API**: http://localhost:5000
 - **Keycloak Admin**: http://localhost:8080 (admin/admin)
-- **Jaeger UI**: http://localhost:16686
+- **Jaeger UI**: http://localhost:16686 (distributed tracing)
 - **RabbitMQ Management**: http://localhost:15672 (guest/guest)
-- **MailHog UI**: http://localhost:8025
+- **MailHog UI**: http://localhost:8025 (email testing - captures all emails sent by Notification Worker)
 
 ### Default Credentials
 

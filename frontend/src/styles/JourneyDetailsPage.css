@@ -1,0 +1,160 @@
+.page {
+  max-width: 760px;
+  margin: 2.5rem auto;
+  padding: 0 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.backLink {
+  display: inline-block;
+  margin-top: 0.25rem;
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.logout {
+  background: transparent;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  padding: 0.4rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.card {
+  background: #111827;
+  border: 1px solid #1f2933;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  row-gap: 0.75rem;
+  column-gap: 0.75rem;
+}
+
+.kv strong {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+button {
+  background: #1f2937;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  padding: 0.45rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #374151;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.danger {
+  color: #f87171;
+  border-color: #7f1d1d;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 999px;
+  background: #064e3b;
+  color: #a7f3d0;
+  font-size: 0.85rem;
+}
+
+.editSection {
+  margin-top: 1.5rem;
+}
+
+.editSection h2 {
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+}
+
+.field input,
+.field select {
+  background: #020617;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  padding: 0.45rem 0.5rem;
+  border-radius: 6px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #9ca3af;
+}
+
+.form-group input,
+.form-group select {
+  background: #020617;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  padding: 0.45rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1px #60a5fa;
+}
+
+.error {
+  color: #f87171;
+  margin-bottom: 0.5rem;
+}
