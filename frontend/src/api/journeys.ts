@@ -9,8 +9,9 @@ export interface JourneyDto {
   transportType: string;
   distanceKm: number;
   isDailyGoalAchieved: boolean;
-
   isFavourite?: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 export interface PagedResult<T> {

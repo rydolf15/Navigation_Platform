@@ -93,6 +93,7 @@ internal sealed class NotificationEventsConsumer : BackgroundService
         _channel.QueueBind(queue, ExchangeName, nameof(JourneyUpdated));
         _channel.QueueBind(queue, ExchangeName, nameof(JourneyDeleted));
         _channel.QueueBind(queue, ExchangeName, nameof(JourneyShared));
+        _channel.QueueBind(queue, ExchangeName, nameof(JourneyUnshared));
         _channel.QueueBind(queue, ExchangeName, nameof(JourneyDailyGoalAchieved));
 
         _channel.BasicQos(0, prefetchCount: 1, global: false);

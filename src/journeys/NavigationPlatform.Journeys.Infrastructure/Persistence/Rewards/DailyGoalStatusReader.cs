@@ -7,6 +7,7 @@ namespace NavigationPlatform.Infrastructure.Rewards;
 
 public sealed class DailyGoalStatusReader : IDailyGoalStatusReader
 {
+    private const decimal DailyGoalThresholdKm = 20.00m;
     private readonly RewardReadDbContext _db;
 
     public DailyGoalStatusReader(RewardReadDbContext db)
@@ -22,8 +23,12 @@ public sealed class DailyGoalStatusReader : IDailyGoalStatusReader
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.UserId == userId && x.Date == today, ct);
 
-        return row is null
-            ? new DailyGoalStatusDto(false, null, null)
-            : new DailyGoalStatusDto(row.RewardGranted, row.Date, row.TotalDistanceKm);
+        if (row is null)
+            return new DailyGoalStatusDto(false, null, null);
+
+        // Check if current total distance meets the threshold, not just if reward was granted
+        var achieved = row.TotalDistanceKm >= DailyGoalThresholdKm;
+        
+        return new DailyGoalStatusDto(achieved, row.Date, row.TotalDistanceKm);
     }
 }

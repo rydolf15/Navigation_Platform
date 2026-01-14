@@ -10,5 +10,7 @@ public sealed record JourneyDto
     string TransportType,
     decimal DistanceKm,
     bool IsDailyGoalAchieved,
-    bool IsFavourite
+    bool IsFavourite,
+    bool CanEdit,
+    bool CanDelete
 );

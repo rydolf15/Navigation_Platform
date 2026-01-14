@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { LoginPage } from "./pages/LoginPage";
 import { JourneyListPage } from "./pages/JourneyListPage";
 import { JourneyDetailsPage } from "./pages/JourneyDetailsPage";
+import { PublicJourneyPage } from "./pages/PublicJourneyPage";
 import { RequireAuth } from "./auth/RequireAuth";
 import { LandingPage } from "./pages/LandingPage";
 import { AdminPage } from "./pages/AdminPage";
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
         <JourneyDetailsPage />
       </RequireAuth>
     ),
+  },
+  {
+    path: "/public/journeys/:linkId",
+    element: <PublicJourneyPage />,
   },
   {
     path: "/admin",

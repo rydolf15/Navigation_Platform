@@ -47,11 +47,22 @@ internal sealed class NotificationEventProcessor
 
                     await UpsertFavouriteAsync(evt.JourneyId, evt.UserId, isFavourite: true, ct);
 
+                    // Notify the user who favorited (for their own UI update)
                     await NotifyUserAsync(
                         evt.UserId,
                         NotificationEvents.JourneyFavouriteChanged,
                         new { journeyId = evt.JourneyId, isFavourite = true },
                         ct);
+
+                    // Notify the journey owner (if different from the user who favorited)
+                    if (evt.JourneyOwnerId != evt.UserId)
+                    {
+                        await NotifyUserAsync(
+                            evt.JourneyOwnerId,
+                            NotificationEvents.JourneyFavorited,
+                            new { journeyId = evt.JourneyId, favoritedByUserId = evt.UserId },
+                            ct);
+                    }
 
                     break;
                 }
@@ -88,6 +99,12 @@ internal sealed class NotificationEventProcessor
                 {
                     var evt = JsonSerializer.Deserialize<JourneyDeleted>(payloadJson)!;
 
+                    // Delete all journey_favourites entries for this journeyId
+                    var favourites = await _db.JourneyFavourites
+                        .Where(x => x.JourneyId == evt.JourneyId)
+                        .ToListAsync(ct);
+                    _db.JourneyFavourites.RemoveRange(favourites);
+
                     await NotifyFavouritersAsync(
                         evt.JourneyId,
                         NotificationEvents.JourneyDeleted,
@@ -107,6 +124,23 @@ internal sealed class NotificationEventProcessor
                         await NotifyUserAsync(
                             evt.SharedWithUserId.Value,
                             NotificationEvents.JourneyShared,
+                            new { evt.JourneyId },
+                            ct);
+                    }
+
+                    break;
+                }
+
+            case nameof(JourneyUnshared):
+                {
+                    var evt = JsonSerializer.Deserialize<JourneyUnshared>(payloadJson)!;
+
+                    // Only notify if there's a specific user who was unshared (not public link revocation)
+                    if (evt.UnsharedFromUserId.HasValue)
+                    {
+                        await NotifyUserAsync(
+                            evt.UnsharedFromUserId.Value,
+                            NotificationEvents.JourneyUnshared,
                             new { evt.JourneyId },
                             ct);
                     }

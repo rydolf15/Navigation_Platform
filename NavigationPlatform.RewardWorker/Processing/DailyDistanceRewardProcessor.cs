@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using NavigationPlatform.Domain.Journeys.Events;
 using NavigationPlatform.RewardWorker.Persistence;
 using NavigationPlatform.RewardWorker.Persistence.Outbox;
@@ -114,6 +115,16 @@ internal sealed class DailyDistanceRewardProcessor
         }
 
         _db.Journeys.Remove(existing);
+
+        // Clear granted_by_journey_id references in daily_distance_projection where it matches the deleted journey
+        var dailyGoalsWithJourneyRef = await _db.DailyDistances
+            .Where(x => x.GrantedByJourneyId == journeyId)
+            .ToListAsync(ct);
+        
+        foreach (var dailyGoal in dailyGoalsWithJourneyRef)
+        {
+            dailyGoal.GrantedByJourneyId = null;
+        }
 
         var (updatedDaily, _) = await ApplyDeltaAsync(
             existing.UserId,

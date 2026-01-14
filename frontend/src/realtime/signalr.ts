@@ -6,6 +6,7 @@ import {
 } from "@microsoft/signalr";
 
 let connection: HubConnection | null = null;
+let listenersRegistered = false;
 
 export function getSignalRConnection(): HubConnection {
   if (connection) return connection;
@@ -19,6 +20,14 @@ export function getSignalRConnection(): HubConnection {
     .build();
 
   return connection;
+}
+
+export function areListenersRegistered(): boolean {
+  return listenersRegistered;
+}
+
+export function markListenersRegistered(): void {
+  listenersRegistered = true;
 }
 
 export async function ensureSignalRStarted(): Promise<void> {

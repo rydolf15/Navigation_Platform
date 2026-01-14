@@ -4,7 +4,7 @@ import "../styles/NotificationToast.css";
 
 export interface Notification {
   id: string;
-  type: "updated" | "deleted" | "shared";
+  type: "updated" | "deleted" | "shared" | "unshared" | "favorited";
   journeyId: string;
   journeyName?: string;
   timestamp: Date;
@@ -37,7 +37,7 @@ export function NotificationToast({
   }, [autoDismissMs, notification.id, onDismiss]);
 
   const handleClick = () => {
-    if (notification.type !== "deleted") {
+    if (notification.type !== "deleted" && notification.type !== "unshared") {
       navigate(`/journeys/${notification.journeyId}`);
     }
     onDismiss(notification.id);
@@ -52,6 +52,10 @@ export function NotificationToast({
         return `${journeyName} was deleted`;
       case "shared":
         return `${journeyName} was shared with you`;
+      case "unshared":
+        return `${journeyName} is no longer shared with you`;
+      case "favorited":
+        return `${journeyName} was favorited by someone`;
       default:
         return "New notification";
     }
@@ -65,6 +69,10 @@ export function NotificationToast({
         return "🗑️";
       case "shared":
         return "🔗";
+      case "unshared":
+        return "🔓";
+      case "favorited":
+        return "⭐";
       default:
         return "ℹ️";
     }

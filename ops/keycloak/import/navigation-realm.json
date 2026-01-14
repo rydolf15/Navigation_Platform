@@ -43,6 +43,18 @@
       ]
     },
     {
+      "username": "user2",
+      "enabled": true,
+      "emailVerified": false,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user2",
+          "temporary": false
+        }
+      ]
+    },
+    {
       "username": "admin",
       "enabled": true,
       "emailVerified": false,

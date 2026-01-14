@@ -20,6 +20,7 @@ using NavigationPlatform.Infrastructure.Persistence;
 using NavigationPlatform.Infrastructure.Persistence.Analytics;
 using NavigationPlatform.Infrastructure.Persistence.Rewards;
 using NavigationPlatform.Infrastructure.Persistence.Sharing;
+using NavigationPlatform.Infrastructure.Persistence.Favourites;
 using NavigationPlatform.Infrastructure.Rewards;
 using Npgsql;
 using Serilog;
@@ -327,10 +328,12 @@ app.MapGet("/api/journeys/{id:guid}/share",
     }).RequireAuthorization();
 
 app.MapPost("/api/journeys/{id:guid}/public-link",
-    async (Guid id, IMediator m, CancellationToken ct) =>
+    async (Guid id, IMediator m, IConfiguration config, CancellationToken ct) =>
     {
         var linkId = await m.Send(new CreatePublicLinkCommand(id), ct);
-        return Results.Ok(new { url = $"/public/journeys/{linkId}" });
+        var spaBaseUrl = config["Auth:SpaBaseUrl"] ?? "http://localhost:5173";
+        var fullUrl = $"{spaBaseUrl}/public/journeys/{linkId}";
+        return Results.Ok(new { url = fullUrl });
     }).RequireAuthorization();
 
 app.MapDelete("/api/journeys/public-link/{id:guid}",
@@ -340,8 +343,8 @@ app.MapDelete("/api/journeys/public-link/{id:guid}",
         return Results.NoContent();
     }).RequireAuthorization();
 
-app.MapGet("/public/journeys/{linkId:guid}",
-    async (Guid linkId, AppDbContext db, CancellationToken ct) =>
+app.MapGet("/api/public/journeys/{linkId:guid}",
+    async (Guid linkId, AppDbContext db, HttpContext httpContext, CancellationToken ct) =>
     {
         var link = await db.Set<JourneyPublicLink>()
             .AsNoTracking()
@@ -353,17 +356,88 @@ app.MapGet("/public/journeys/{linkId:guid}",
         var journey = await db.Journeys
             .AsNoTracking()
             .Where(j => j.Id == link.JourneyId)
-            .Select(j => new
-            {
-                j.StartLocation,
-                j.ArrivalLocation,
-                j.StartTime,
-                j.ArrivalTime,
-                DistanceKm = (decimal)j.DistanceKm
-            })
-            .FirstAsync(ct);
+            .FirstOrDefaultAsync(ct);
 
-        return Results.Ok(journey);
+        if (journey == null)
+            return Results.NotFound();
+
+        // Check if user is authenticated using HttpContext
+        var isAuthenticated = httpContext.User?.Identity?.IsAuthenticated == true;
+        
+        // If not authenticated, return read-only data
+        if (!isAuthenticated)
+        {
+            return Results.Ok(new
+            {
+                journey.Id,
+                journey.StartLocation,
+                journey.ArrivalLocation,
+                journey.StartTime,
+                journey.ArrivalTime,
+                DistanceKm = (decimal)journey.DistanceKm,
+                TransportType = journey.TransportType.ToString(),
+                CanEdit = false,
+                CanDelete = false,
+                CanShare = false,
+                CanFavorite = false
+            });
+        }
+
+        // If authenticated, get user ID and check permissions
+        var subClaim = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? httpContext.User.FindFirstValue("sub");
+        
+        if (string.IsNullOrWhiteSpace(subClaim) || !Guid.TryParse(subClaim, out var userId))
+        {
+            // If we can't get user ID, treat as unauthenticated
+            return Results.Ok(new
+            {
+                journey.Id,
+                journey.StartLocation,
+                journey.ArrivalLocation,
+                journey.StartTime,
+                journey.ArrivalTime,
+                DistanceKm = (decimal)journey.DistanceKm,
+                TransportType = journey.TransportType.ToString(),
+                CanEdit = false,
+                CanDelete = false,
+                CanShare = false,
+                CanFavorite = false
+            });
+        }
+
+        var isOwner = journey.UserId == userId;
+        var isSharedRecipient = !isOwner && await db.Set<JourneyShare>()
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.JourneyId == link.JourneyId &&
+                x.SharedWithUserId == userId, ct);
+
+        var canEdit = isOwner || isSharedRecipient;
+        var canDelete = isOwner || isSharedRecipient;
+        var canShare = isOwner; // Only owners can share
+        var canFavorite = isOwner || isSharedRecipient; // Can favorite if you can access
+
+        return Results.Ok(new
+        {
+            journey.Id,
+            journey.StartLocation,
+            journey.ArrivalLocation,
+            journey.StartTime,
+            journey.ArrivalTime,
+            DistanceKm = (decimal)journey.DistanceKm,
+            TransportType = journey.TransportType.ToString(),
+            IsDailyGoalAchieved = journey.IsDailyGoalAchieved,
+            IsFavourite = await db.Set<JourneyFavourite>()
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.JourneyId == link.JourneyId &&
+                    x.UserId == userId, ct),
+            CanEdit = canEdit,
+            CanDelete = canDelete,
+            CanShare = canShare,
+            CanFavorite = canFavorite
+        });
     });
 
 app.MapGet("/api/journeys",

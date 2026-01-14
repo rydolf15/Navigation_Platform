@@ -56,7 +56,7 @@ public sealed class FavoriteJourneyCommandHandler
 
         _db.OutboxMessages.Add(
             OutboxMessage.From(
-                new JourneyFavorited(cmd.JourneyId, _user.UserId)));
+                new JourneyFavorited(cmd.JourneyId, _user.UserId, journey.UserId)));
 
         await _db.SaveChangesAsync(ct);
     }

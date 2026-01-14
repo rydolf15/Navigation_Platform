@@ -118,9 +118,18 @@ export function JourneyDetailsPage() {
       }
     }
 
+    function onUnshared(e: Event) {
+      const evt = e as CustomEvent<{ journeyId: string }>;
+
+      if (evt.detail.journeyId === journey?.id) {
+        navigate("/");
+      }
+    }
+
     window.addEventListener("journey:favourite-changed", onFavouriteChanged);
     window.addEventListener("journey:updated", onUpdated);
     window.addEventListener("journey:deleted", onDeleted);
+    window.addEventListener("journey:unshared", onUnshared);
 
     return () => {
       cancelled = true;
@@ -130,6 +139,7 @@ export function JourneyDetailsPage() {
       );
       window.removeEventListener("journey:updated", onUpdated);
       window.removeEventListener("journey:deleted", onDeleted);
+      window.removeEventListener("journey:unshared", onUnshared);
     };
   }, [journey?.id, navigate]);
 
@@ -345,9 +355,15 @@ export function JourneyDetailsPage() {
 
       <div className="actions">
         <FavouriteButton isFavourite={favourite} onToggle={toggleFavourite} />
-        <button onClick={() => setShowShare(true)}>Share</button>
-        <button onClick={() => setEditing(v => !v)}>Edit</button>
-        <button className="danger" onClick={confirmDelete}>Delete</button>
+        {journey.canEdit && (
+          <>
+            <button onClick={() => setShowShare(true)}>Share</button>
+            <button onClick={() => setEditing(v => !v)}>Edit</button>
+          </>
+        )}
+        {journey.canDelete && (
+          <button className="danger" onClick={confirmDelete}>Delete</button>
+        )}
       </div>
 
       {showShare && (

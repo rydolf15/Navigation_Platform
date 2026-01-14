@@ -19,7 +19,6 @@ export function JourneyListPage() {
   const [loading, setLoading] = useState(true);
   const [dailyGoalAchieved, setDailyGoalAchieved] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [reloadToken, setReloadToken] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
 
@@ -40,7 +39,7 @@ export function JourneyListPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, reloadToken]);
+  }, [page]);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +75,7 @@ export function JourneyListPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, []);
 
   // Listen for journey notifications
   useEffect(() => {
@@ -90,6 +89,11 @@ export function JourneyListPage() {
         const journey = await getJourneyById(evt.detail.journeyId);
         const journeyName = `${journey.startLocation} → ${journey.arrivalLocation}`;
         
+        // Optimistically update journey in list
+        setJourneys(prev => prev.map(j => 
+          j.id === evt.detail.journeyId ? journey : j
+        ));
+        
         const notification: Notification = {
           id: `updated-${evt.detail.journeyId}-${Date.now()}`,
           type: "updated",
@@ -100,17 +104,19 @@ export function JourneyListPage() {
         };
 
         setNotifications(prev => [notification, ...prev]);
-        setReloadToken(x => x + 1); // Refresh journey list
       } catch {
         // Journey might not exist or user doesn't have access
       }
     }
 
-    async function handleJourneyDeleted(e: Event) {
+    function handleJourneyDeleted(e: Event) {
       const evt = e as CustomEvent<{ journeyId: string }>;
       if (cancelled) return;
 
-      // Try to get journey name from current list
+      // Optimistically remove journey from list
+      setJourneys(prev => prev.filter(j => j.id !== evt.detail.journeyId));
+
+      // Try to get journey name from current list before removal
       const journey = journeys.find(j => j.id === evt.detail.journeyId);
       const journeyName = journey 
         ? `${journey.startLocation} → ${journey.arrivalLocation}`
@@ -126,7 +132,6 @@ export function JourneyListPage() {
       };
 
       setNotifications(prev => [notification, ...prev]);
-      setReloadToken(x => x + 1); // Refresh journey list
     }
 
     async function handleJourneyShared(e: Event) {
@@ -136,6 +141,13 @@ export function JourneyListPage() {
       try {
         const journey = await getJourneyById(evt.detail.journeyId);
         const journeyName = `${journey.startLocation} → ${journey.arrivalLocation}`;
+        
+        // Optimistically add journey to list if not already present
+        setJourneys(prev => {
+          const exists = prev.some(j => j.id === evt.detail.journeyId);
+          if (exists) return prev;
+          return [journey, ...prev];
+        });
         
         const notification: Notification = {
           id: `shared-${evt.detail.journeyId}-${Date.now()}`,
@@ -147,7 +159,54 @@ export function JourneyListPage() {
         };
 
         setNotifications(prev => [notification, ...prev]);
-        setReloadToken(x => x + 1); // Refresh journey list to show shared journey
+      } catch {
+        // Journey might not exist or user doesn't have access
+      }
+    }
+
+    function handleJourneyUnshared(e: Event) {
+      const evt = e as CustomEvent<{ journeyId: string }>;
+      if (cancelled) return;
+
+      // Optimistically remove journey from list
+      setJourneys(prev => prev.filter(j => j.id !== evt.detail.journeyId));
+
+      // Try to get journey name from current list before removal
+      const journey = journeys.find(j => j.id === evt.detail.journeyId);
+      const journeyName = journey 
+        ? `${journey.startLocation} → ${journey.arrivalLocation}`
+        : undefined;
+
+      const notification: Notification = {
+        id: `unshared-${evt.detail.journeyId}-${Date.now()}`,
+        type: "unshared",
+        journeyId: evt.detail.journeyId,
+        journeyName,
+        timestamp: new Date(),
+        read: false,
+      };
+
+      setNotifications(prev => [notification, ...prev]);
+    }
+
+    async function handleJourneyFavorited(e: Event) {
+      const evt = e as CustomEvent<{ journeyId: string; favoritedByUserId: string }>;
+      if (cancelled) return;
+
+      try {
+        const journey = await getJourneyById(evt.detail.journeyId);
+        const journeyName = `${journey.startLocation} → ${journey.arrivalLocation}`;
+        
+        const notification: Notification = {
+          id: `favorited-${evt.detail.journeyId}-${Date.now()}`,
+          type: "favorited",
+          journeyId: evt.detail.journeyId,
+          journeyName,
+          timestamp: new Date(),
+          read: false,
+        };
+
+        setNotifications(prev => [notification, ...prev]);
       } catch {
         // Journey might not exist or user doesn't have access
       }
@@ -156,12 +215,16 @@ export function JourneyListPage() {
     window.addEventListener("journey:updated", handleJourneyUpdated);
     window.addEventListener("journey:deleted", handleJourneyDeleted);
     window.addEventListener("journey:shared", handleJourneyShared);
+    window.addEventListener("journey:unshared", handleJourneyUnshared);
+    window.addEventListener("journey:favorited", handleJourneyFavorited);
 
     return () => {
       cancelled = true;
       window.removeEventListener("journey:updated", handleJourneyUpdated);
       window.removeEventListener("journey:deleted", handleJourneyDeleted);
       window.removeEventListener("journey:shared", handleJourneyShared);
+      window.removeEventListener("journey:unshared", handleJourneyUnshared);
+      window.removeEventListener("journey:favorited", handleJourneyFavorited);
     };
   }, [journeys]);
 
@@ -242,9 +305,16 @@ export function JourneyListPage() {
       {showCreate && (
         <CreateJourneyModal
           onClose={() => setShowCreate(false)}
-          onCreated={() => {
+          onCreated={async () => {
             setPage(1);
-            setReloadToken(x => x + 1);
+            // Reload journeys to show the newly created one
+            try {
+              const result = await getJourneys(1, PAGE_SIZE);
+              setJourneys(result.items);
+              setTotal(result.totalCount);
+            } catch {
+              // Ignore errors, user can refresh manually if needed
+            }
           }}
         />
       )}

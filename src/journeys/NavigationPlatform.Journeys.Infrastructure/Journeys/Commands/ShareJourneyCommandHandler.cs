@@ -94,6 +94,14 @@ public sealed class ShareJourneyCommandHandler
                 Action = $"UNSHARE_USER:{recipientUserId}",
                 OccurredUtc = DateTime.UtcNow
             });
+
+            _db.OutboxMessages.Add(
+                OutboxMessage.From(
+                    new JourneyUnshared(
+                        cmd.JourneyId,
+                        _currentUser.UserId,
+                        PublicLinkId: null,
+                        UnsharedFromUserId: recipientUserId)));
         }
 
         // Optional but recommended: if a user is unshared, remove their favourite so they stop receiving updates.

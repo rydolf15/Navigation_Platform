@@ -49,7 +49,13 @@ internal sealed class JourneyReadRepository : IJourneyReadRepository
                 j.IsDailyGoalAchieved,
                 _db.Set<JourneyFavourite>().Any(f =>
                     f.JourneyId == j.Id &&
-                    f.UserId == userId)
+                    f.UserId == userId),
+                j.UserId == userId || _db.Set<JourneyShare>().Any(s =>
+                    s.JourneyId == j.Id &&
+                    s.SharedWithUserId == userId), // CanEdit: owner or shared recipient
+                j.UserId == userId || _db.Set<JourneyShare>().Any(s =>
+                    s.JourneyId == j.Id &&
+                    s.SharedWithUserId == userId)  // CanDelete: owner or shared recipient
             ))
             .ToListAsync(ct);
 
@@ -85,7 +91,13 @@ internal sealed class JourneyReadRepository : IJourneyReadRepository
                 j.IsDailyGoalAchieved,
                 _db.Set<JourneyFavourite>().Any(f =>
                     f.JourneyId == j.Id &&
-                    f.UserId == userId)
+                    f.UserId == userId),
+                j.UserId == userId || _db.Set<JourneyShare>().Any(s =>
+                    s.JourneyId == j.Id &&
+                    s.SharedWithUserId == userId), // CanEdit: owner or shared recipient
+                j.UserId == userId || _db.Set<JourneyShare>().Any(s =>
+                    s.JourneyId == j.Id &&
+                    s.SharedWithUserId == userId)  // CanDelete: owner or shared recipient
             ))
             .FirstOrDefaultAsync(ct);
     }

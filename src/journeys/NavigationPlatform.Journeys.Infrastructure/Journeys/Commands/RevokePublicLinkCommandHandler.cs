@@ -55,7 +55,8 @@ public sealed class RevokePublicLinkCommandHandler
                 new JourneyUnshared(
                     link.JourneyId,
                     _currentUser.UserId,
-                    PublicLinkId: link.Id)));
+                    PublicLinkId: link.Id,
+                    UnsharedFromUserId: null)));
 
         await _db.SaveChangesAsync(ct);
     }

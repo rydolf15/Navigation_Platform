@@ -1,10 +1,14 @@
 ﻿using MediatR;
+using Microsoft.EntityFrameworkCore;
 using NavigationPlatform.Application.Abstractions.Identity;
 using NavigationPlatform.Application.Abstractions.Messaging;
 using NavigationPlatform.Application.Abstractions.Persistence;
+using NavigationPlatform.Application.Journeys.Commands;
 using NavigationPlatform.Domain.Journeys;
+using NavigationPlatform.Infrastructure.Persistence;
+using NavigationPlatform.Infrastructure.Persistence.Sharing;
 
-namespace NavigationPlatform.Application.Journeys.Commands;
+namespace NavigationPlatform.Infrastructure.Journeys.Commands;
 
 public sealed class UpdateJourneyCommandHandler
     : IRequestHandler<UpdateJourneyCommand>
@@ -12,15 +16,18 @@ public sealed class UpdateJourneyCommandHandler
     private readonly IJourneyRepository _repo;
     private readonly IUnitOfWork _uow;
     private readonly ICurrentUser _currentUser;
+    private readonly AppDbContext _db;
 
     public UpdateJourneyCommandHandler(
         IJourneyRepository repo,
         IUnitOfWork uow,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        AppDbContext db)
     {
         _repo = repo;
         _uow = uow;
         _currentUser = currentUser;
+        _db = db;
     }
 
     public async Task Handle(UpdateJourneyCommand request, CancellationToken ct)
@@ -28,8 +35,16 @@ public sealed class UpdateJourneyCommandHandler
         var journey = await _repo.GetByIdAsync(request.JourneyId, ct)
             ?? throw new KeyNotFoundException("Journey not found.");
 
-        if (journey.UserId != _currentUser.UserId)
-            throw new UnauthorizedAccessException("User is not the owner of this journey.");
+        // Check if user is owner OR shared recipient
+        var isOwner = journey.UserId == _currentUser.UserId;
+        var isSharedRecipient = !isOwner && await _db.Set<JourneyShare>()
+            .AsNoTracking()
+            .AnyAsync(x =>
+                x.JourneyId == request.JourneyId &&
+                x.SharedWithUserId == _currentUser.UserId, ct);
+
+        if (!isOwner && !isSharedRecipient)
+            throw new UnauthorizedAccessException("User does not have permission to edit this journey.");
 
         // Ensure UTC conversion as safety measure (JSON converter should handle this, but this provides defense in depth)
         var startTime = request.StartTime.Kind switch
