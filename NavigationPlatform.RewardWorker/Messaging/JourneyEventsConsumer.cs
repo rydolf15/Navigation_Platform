@@ -136,55 +136,62 @@ internal sealed class JourneyEventsConsumer : BackgroundService
                 using var scope = _scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<RewardDbContext>();
 
-                await using var tx = await db.Database.BeginTransactionAsync();
+                // IMPORTANT:
+                // RewardDbContext is configured with EnableRetryOnFailure, which uses a retrying execution strategy.
+                // EF Core does not allow user-initiated transactions unless they're executed via CreateExecutionStrategy().
+                var strategy = db.Database.CreateExecutionStrategy();
 
-                if (hasMessageId)
+                await strategy.ExecuteAsync(async () =>
                 {
-                    var alreadyProcessed = await db.InboxMessages
-                        .AsNoTracking()
-                        .AnyAsync(x => x.Id == messageGuid);
+                    await using var tx = await db.Database.BeginTransactionAsync();
 
-                    if (alreadyProcessed)
+                    if (hasMessageId)
                     {
-                        await tx.CommitAsync();
-                        channel.BasicAck(ea.DeliveryTag, multiple: false);
-                        return;
+                        var alreadyProcessed = await db.InboxMessages
+                            .AsNoTracking()
+                            .AnyAsync(x => x.Id == messageGuid);
+
+                        if (alreadyProcessed)
+                        {
+                            await tx.CommitAsync();
+                            return;
+                        }
                     }
-                }
 
-                switch (type)
-                {
-                    case nameof(JourneyCreated):
-                        await ApplyUpsertAsync(
-                            JsonSerializer.Deserialize<JourneyCreated>(json)!,
-                            db,
-                            hasMessageId ? messageGuid : null,
-                            type);
-                        break;
+                    switch (type)
+                    {
+                        case nameof(JourneyCreated):
+                            await ApplyUpsertAsync(
+                                JsonSerializer.Deserialize<JourneyCreated>(json)!,
+                                db,
+                                hasMessageId ? messageGuid : null,
+                                type);
+                            break;
 
-                    case nameof(JourneyUpdated):
-                        await ApplyUpsertAsync(
-                            JsonSerializer.Deserialize<JourneyUpdated>(json)!,
-                            db,
-                            hasMessageId ? messageGuid : null,
-                            type);
-                        break;
+                        case nameof(JourneyUpdated):
+                            await ApplyUpsertAsync(
+                                JsonSerializer.Deserialize<JourneyUpdated>(json)!,
+                                db,
+                                hasMessageId ? messageGuid : null,
+                                type);
+                            break;
 
-                    case nameof(JourneyDeleted):
-                        await ApplyDeleteAsync(
-                            JsonSerializer.Deserialize<JourneyDeleted>(json)!,
-                            db,
-                            hasMessageId ? messageGuid : null,
-                            type);
-                        break;
+                        case nameof(JourneyDeleted):
+                            await ApplyDeleteAsync(
+                                JsonSerializer.Deserialize<JourneyDeleted>(json)!,
+                                db,
+                                hasMessageId ? messageGuid : null,
+                                type);
+                            break;
 
-                    default:
-                        _logger.LogWarning("Ignoring unsupported event type {Type}", type);
-                        break;
-                }
+                        default:
+                            _logger.LogWarning("Ignoring unsupported event type {Type}", type);
+                            break;
+                    }
 
-                await db.SaveChangesAsync();
-                await tx.CommitAsync();
+                    await db.SaveChangesAsync();
+                    await tx.CommitAsync();
+                });
 
                 channel.BasicAck(ea.DeliveryTag, multiple: false);
             }

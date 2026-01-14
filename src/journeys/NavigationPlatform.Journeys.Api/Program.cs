@@ -37,7 +37,8 @@ builder.WebHost.ConfigureKestrel(options =>
 
 // ---------- Logging ----------
 builder.Host.UseSerilog((ctx, lc) =>
-    lc.ReadFrom.Configuration(ctx.Configuration));
+    lc.ReadFrom.Configuration(ctx.Configuration)
+      .WriteTo.Console());
 
 // ---------- OpenTelemetry Tracing ----------
 builder.Services.AddOpenTelemetry()
@@ -136,7 +137,9 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddDbContext<RewardReadDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("RewardsRead")
+        ?? builder.Configuration.GetConnectionString("Default")));
 
 builder.Services.AddScoped<IDailyGoalStatusReader, DailyGoalStatusReader>();
 
@@ -153,6 +156,9 @@ using (var scope = app.Services.CreateScope())
         .GetRequiredService<ILogger<Program>>();
 
     var journeysConnectionString = builder.Configuration.GetConnectionString("Default")!;
+    var rewardsReadConnectionString =
+        builder.Configuration.GetConnectionString("RewardsRead")
+        ?? journeysConnectionString;
 
     const int maxRetries = 10;
     var delay = TimeSpan.FromSeconds(3);
@@ -162,6 +168,7 @@ using (var scope = app.Services.CreateScope())
         try
         {
             EnsureDatabaseExists(journeysConnectionString);
+            EnsureDatabaseExists(rewardsReadConnectionString);
             db.Database.Migrate();
 
             // Create reward read-model table (separate context; not covered by migrations)
@@ -253,6 +260,14 @@ app.UseExceptionHandler(errorApp =>
         var exception = feature?.Error;
 
         var correlationId = context.TraceIdentifier;
+
+        if (exception != null)
+        {
+            var logger = context.RequestServices
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("UnhandledException");
+            logger.LogError(exception, "Unhandled exception. CorrelationId={CorrelationId}", correlationId);
+        }
 
         context.Response.ContentType = "application/problem+json";
 
