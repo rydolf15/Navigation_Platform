@@ -5,6 +5,7 @@ using NavigationPlatform.Application.Abstractions.Persistence;
 using NavigationPlatform.Infrastructure.Persistence.Analytics;
 using NavigationPlatform.Infrastructure.Persistence;
 using NavigationPlatform.Infrastructure.Persistence.Journeys;
+using NavigationPlatform.Infrastructure.Persistence.Rewards;
 using NavigationPlatform.Infrastructure.Persistence.Repositories;
 
 namespace NavigationPlatform.Infrastructure;
@@ -24,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<IJourneyRepository, JourneyRepository>();
         services.AddScoped<IJourneyReadRepository, JourneyReadRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<DailyGoalAchievedHandler>();
 
         return services;
     }

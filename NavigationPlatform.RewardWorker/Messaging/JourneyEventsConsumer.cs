@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using NavigationPlatform.Domain.Journeys.Events;
 using NavigationPlatform.RewardWorker.Processing;
 using NavigationPlatform.RewardWorker.Persistence;
-using NavigationPlatform.RewardWorker.Persistence.Outbox;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Serilog.Context;
@@ -126,15 +125,23 @@ internal sealed class JourneyEventsConsumer : BackgroundService
         var json = Encoding.UTF8.GetString(ea.Body.ToArray());
 
         var messageId = ea.BasicProperties?.MessageId;
+        var correlationId = ea.BasicProperties?.CorrelationId;
+        if (string.IsNullOrWhiteSpace(correlationId))
+            correlationId = messageId;
+        if (string.IsNullOrWhiteSpace(correlationId))
+            correlationId = Guid.NewGuid().ToString();
+
         var hasMessageId = Guid.TryParse(messageId, out var messageGuid);
 
         try
         {
             using (LogContext.PushProperty("IncomingMessageId", messageId))
             using (LogContext.PushProperty("IncomingMessageType", type))
+            using (LogContext.PushProperty("CorrelationId", correlationId))
             {
                 using var scope = _scopeFactory.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<RewardDbContext>();
+                var processor = new DailyDistanceRewardProcessor(db);
 
                 // IMPORTANT:
                 // RewardDbContext is configured with EnableRetryOnFailure, which uses a retrying execution strategy.
@@ -158,35 +165,42 @@ internal sealed class JourneyEventsConsumer : BackgroundService
                         }
                     }
 
+                    var processed = false;
+
                     switch (type)
                     {
                         case nameof(JourneyCreated):
-                            await ApplyUpsertAsync(
-                                JsonSerializer.Deserialize<JourneyCreated>(json)!,
-                                db,
-                                hasMessageId ? messageGuid : null,
-                                type);
+                            await processor.UpsertAsync(
+                                JsonSerializer.Deserialize<JourneyCreated>(json)!);
+                            processed = true;
                             break;
 
                         case nameof(JourneyUpdated):
-                            await ApplyUpsertAsync(
-                                JsonSerializer.Deserialize<JourneyUpdated>(json)!,
-                                db,
-                                hasMessageId ? messageGuid : null,
-                                type);
+                            await processor.UpsertAsync(
+                                JsonSerializer.Deserialize<JourneyUpdated>(json)!);
+                            processed = true;
                             break;
 
                         case nameof(JourneyDeleted):
-                            await ApplyDeleteAsync(
-                                JsonSerializer.Deserialize<JourneyDeleted>(json)!,
-                                db,
-                                hasMessageId ? messageGuid : null,
-                                type);
+                            await processor.DeleteAsync(
+                                JsonSerializer.Deserialize<JourneyDeleted>(json)!);
+                            processed = true;
                             break;
 
                         default:
                             _logger.LogWarning("Ignoring unsupported event type {Type}", type);
                             break;
+                    }
+
+                    if (processed && hasMessageId)
+                    {
+                        db.InboxMessages.Add(new InboxMessage
+                        {
+                            Id = messageGuid,
+                            Type = type,
+                            OccurredUtc = DateTime.UtcNow,
+                            ProcessedUtc = DateTime.UtcNow
+                        });
                     }
 
                     await db.SaveChangesAsync();
@@ -200,132 +214,6 @@ internal sealed class JourneyEventsConsumer : BackgroundService
         {
             _logger.LogError(ex, "Failed processing message; will requeue");
             channel.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
-        }
-    }
-
-    private static async Task ApplyUpsertAsync(
-        IJourneyDistanceEvent evt,
-        RewardDbContext db,
-        Guid? messageId,
-        string type)
-    {
-        var journeyId = evt.JourneyId;
-        var userId = evt.UserId;
-        var date = DateOnly.FromDateTime(evt.StartTime);
-        var distanceKm = evt.DistanceKm;
-
-        var existing = await db.Journeys.FindAsync(journeyId);
-
-        if (existing == null)
-        {
-            existing = new JourneyProjection
-            {
-                JourneyId = journeyId,
-                UserId = userId,
-                Date = date,
-                DistanceKm = distanceKm
-            };
-            db.Journeys.Add(existing);
-
-            await ApplyDeltaAsync(db, userId, date, +distanceKm, triggeringJourneyId: journeyId);
-        }
-        else
-        {
-            var oldDate = existing.Date;
-            var oldDistance = existing.DistanceKm;
-
-            existing.UserId = userId;
-            existing.Date = date;
-            existing.DistanceKm = distanceKm;
-
-            if (oldDate == date)
-            {
-                await ApplyDeltaAsync(db, userId, date, distanceKm - oldDistance, triggeringJourneyId: journeyId);
-            }
-            else
-            {
-                await ApplyDeltaAsync(db, userId, oldDate, -oldDistance, triggeringJourneyId: journeyId);
-                await ApplyDeltaAsync(db, userId, date, +distanceKm, triggeringJourneyId: journeyId);
-            }
-        }
-
-        if (messageId.HasValue)
-        {
-            db.InboxMessages.Add(new InboxMessage
-            {
-                Id = messageId.Value,
-                Type = type,
-                OccurredUtc = DateTime.UtcNow,
-                ProcessedUtc = DateTime.UtcNow
-            });
-        }
-    }
-
-    private static async Task ApplyDeleteAsync(
-        JourneyDeleted evt,
-        RewardDbContext db,
-        Guid? messageId,
-        string type)
-    {
-        var existing = await db.Journeys.FindAsync(evt.JourneyId);
-        if (existing != null)
-        {
-            db.Journeys.Remove(existing);
-            await ApplyDeltaAsync(db, existing.UserId, existing.Date, -existing.DistanceKm, triggeringJourneyId: evt.JourneyId);
-        }
-
-        if (messageId.HasValue)
-        {
-            db.InboxMessages.Add(new InboxMessage
-            {
-                Id = messageId.Value,
-                Type = type,
-                OccurredUtc = DateTime.UtcNow,
-                ProcessedUtc = DateTime.UtcNow
-            });
-        }
-    }
-
-    private static async Task ApplyDeltaAsync(
-        RewardDbContext db,
-        Guid userId,
-        DateOnly date,
-        decimal deltaKm,
-        Guid triggeringJourneyId)
-    {
-        if (deltaKm == 0) return;
-
-        var daily = await db.DailyDistances.FindAsync(userId, date);
-        if (daily == null)
-        {
-            daily = new DailyDistanceProjection
-            {
-                UserId = userId,
-                Date = date,
-                TotalDistanceKm = 0,
-                RewardGranted = false
-            };
-            db.DailyDistances.Add(daily);
-        }
-
-        daily.TotalDistanceKm += deltaKm;
-
-        if (daily.TotalDistanceKm < 0)
-            daily.TotalDistanceKm = 0;
-
-        if (!daily.RewardGranted &&
-            DailyRewardEvaluator.ShouldGrant(daily.TotalDistanceKm))
-        {
-            daily.RewardGranted = true;
-            daily.GrantedByJourneyId = triggeringJourneyId;
-
-            db.OutboxMessages.Add(
-                OutboxMessage.From(
-                    new JourneyDailyGoalAchieved(
-                        triggeringJourneyId,
-                        userId,
-                        date,
-                        daily.TotalDistanceKm)));
         }
     }
 }

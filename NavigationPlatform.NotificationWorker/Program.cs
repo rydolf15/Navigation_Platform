@@ -15,7 +15,10 @@ await EnsureDatabaseExistsAsync(connectionString, CancellationToken.None);
 await EnsureSchemaAsync(connectionString, CancellationToken.None);
 
 // ---------- Logging ----------
-builder.Services.AddSerilog(c => c.WriteTo.Console());
+builder.Services.AddSerilog((sp, lc) =>
+    lc.ReadFrom.Configuration(builder.Configuration)
+      .ReadFrom.Services(sp)
+      .Enrich.FromLogContext());
 
 // ---------- Database ----------
 builder.Services.AddDbContext<NotificationDbContext>(o =>

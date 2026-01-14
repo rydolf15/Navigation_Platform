@@ -27,8 +27,10 @@ builder.Services.AddDbContext<RewardDbContext>(o =>
 builder.Services.AddHostedService<JourneyEventsConsumer>();
 builder.Services.AddHostedService<OutboxPublisher>();
 
-builder.Services.AddSerilog(cfg =>
-    cfg.WriteTo.Console());
+builder.Services.AddSerilog((sp, lc) =>
+    lc.ReadFrom.Configuration(builder.Configuration)
+      .ReadFrom.Services(sp)
+      .Enrich.FromLogContext());
 
 var host = builder.Build();
 

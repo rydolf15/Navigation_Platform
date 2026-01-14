@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using NavigationPlatform.Gateway.Admin;
 using NavigationPlatform.Gateway.Auth;
+using NavigationPlatform.Gateway.Middleware;
 using NavigationPlatform.Gateway.Messaging;
 using NavigationPlatform.Gateway.Persistence;
 using NavigationPlatform.Gateway.Realtime;
@@ -250,52 +251,10 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ---------- Middleware ----------
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<RequestBodyCaptureMiddleware>();
 app.UseSerilogRequestLogging();
-
-app.Use(async (ctx, next) =>
-{
-    var correlationId = ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault()
-        ?? Guid.NewGuid().ToString();
-
-    ctx.Response.Headers["X-Correlation-Id"] = correlationId;
-    await next();
-});
-
-app.UseExceptionHandler(errorApp =>
-{
-    errorApp.Run(async context =>
-    {
-        var feature = context.Features.Get<IExceptionHandlerFeature>();
-        var exception = feature?.Error;
-
-        var correlationId = context.TraceIdentifier;
-
-        context.Response.ContentType = "application/problem+json";
-
-        var (status, title) = exception switch
-        {
-            InvalidOperationException => (StatusCodes.Status400BadRequest, "Invalid operation"),
-            ArgumentException => (StatusCodes.Status400BadRequest, "Invalid argument"),
-            _ => (StatusCodes.Status500InternalServerError, "Internal server error")
-        };
-
-        context.Response.StatusCode = status;
-
-        var problem = new ProblemDetails
-        {
-            Status = status,
-            Title = title,
-            Detail = "An unexpected error occurred.",
-            Instance = context.Request.Path,
-            Extensions =
-            {
-                ["correlationId"] = correlationId
-            }
-        };
-
-        await context.Response.WriteAsJsonAsync(problem);
-    });
-});
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

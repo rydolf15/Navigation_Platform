@@ -124,13 +124,20 @@ internal sealed class NotificationEventsConsumer : BackgroundService
         var json = Encoding.UTF8.GetString(ea.Body.ToArray());
 
         var messageId = ea.BasicProperties?.MessageId;
+        var correlationId = ea.BasicProperties?.CorrelationId;
         if (!Guid.TryParse(messageId, out var messageGuid))
             messageGuid = Guid.NewGuid();
+
+        if (string.IsNullOrWhiteSpace(correlationId))
+            correlationId = messageId;
+        if (string.IsNullOrWhiteSpace(correlationId))
+            correlationId = messageGuid.ToString();
 
         try
         {
             using (LogContext.PushProperty("IncomingMessageId", messageId))
             using (LogContext.PushProperty("IncomingMessageType", type))
+            using (LogContext.PushProperty("CorrelationId", correlationId))
             {
                 using var scope = _scopeFactory.CreateScope();
                 var processor = scope.ServiceProvider.GetRequiredService<NotificationEventProcessor>();

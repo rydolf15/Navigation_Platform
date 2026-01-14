@@ -1,6 +1,4 @@
-using NavigationPlatform.Application.Abstractions.Messaging;
 using NavigationPlatform.Domain.Journeys.Events;
-using NavigationPlatform.Infrastructure.Persistence;
 using NavigationPlatform.Infrastructure.Persistence.Rewards;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -116,45 +114,23 @@ internal sealed class DailyGoalAchievedConsumer : BackgroundService
 
         var json = Encoding.UTF8.GetString(ea.Body.ToArray());
         var messageId = ea.BasicProperties?.MessageId;
+        var correlationId = ea.BasicProperties?.CorrelationId;
+        if (string.IsNullOrWhiteSpace(correlationId))
+            correlationId = messageId;
+        if (string.IsNullOrWhiteSpace(correlationId))
+            correlationId = Guid.NewGuid().ToString();
 
         try
         {
             using (LogContext.PushProperty("IncomingMessageId", messageId))
             using (LogContext.PushProperty("IncomingMessageType", ea.RoutingKey))
+            using (LogContext.PushProperty("CorrelationId", correlationId))
             {
                 var evt = JsonSerializer.Deserialize<JourneyDailyGoalAchieved>(json)!;
 
                 using var scope = _scopeFactory.CreateScope();
-
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-                var rewardsDb = scope.ServiceProvider.GetRequiredService<RewardReadDbContext>();
-
-                var journey = await db.Journeys.FindAsync([evt.JourneyId]);
-                if (journey != null)
-                {
-                    journey.MarkDailyGoalAchieved();
-                    await uow.CommitAsync(CancellationToken.None);
-                }
-
-                var row = await rewardsDb.DailyDistances.FindAsync([evt.UserId, evt.Date]);
-                if (row == null)
-                {
-                    rewardsDb.DailyDistances.Add(new DailyDistanceProjection
-                    {
-                        UserId = evt.UserId,
-                        Date = evt.Date,
-                        TotalDistanceKm = evt.TotalDistanceKm,
-                        RewardGranted = true
-                    });
-                }
-                else
-                {
-                    row.TotalDistanceKm = evt.TotalDistanceKm;
-                    row.RewardGranted = true;
-                }
-
-                await rewardsDb.SaveChangesAsync();
+                var handler = scope.ServiceProvider.GetRequiredService<DailyGoalAchievedHandler>();
+                await handler.HandleAsync(evt, CancellationToken.None);
 
                 channel.BasicAck(ea.DeliveryTag, multiple: false);
             }

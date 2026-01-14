@@ -1,0 +1,17 @@
+services:
+  journey-service:
+    volumes:
+      - ./logs:/app/logs
+
+  gateway:
+    volumes:
+      - ./logs:/app/logs
+
+  reward-worker:
+    volumes:
+      - ./logs:/app/logs
+
+  notification-service:
+    volumes:
+      - ./logs:/app/logs
+

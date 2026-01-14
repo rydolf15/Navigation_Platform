@@ -72,6 +72,7 @@ internal sealed class OutboxPublisher : BackgroundService
                 {
                     using (LogContext.PushProperty("OutboxMessageId", msg.Id))
                     using (LogContext.PushProperty("OutboxMessageType", msg.Type))
+                    using (LogContext.PushProperty("CorrelationId", msg.Id))
                     {
                         var body = Encoding.UTF8.GetBytes(msg.Payload);
 
@@ -79,6 +80,7 @@ internal sealed class OutboxPublisher : BackgroundService
                         props.Persistent = true;
                         props.Type = msg.Type;
                         props.MessageId = msg.Id.ToString();
+                        props.CorrelationId = msg.Id.ToString();
 
                         // Route by event type name (e.g., JourneyCreated)
                         channel.BasicPublish(
